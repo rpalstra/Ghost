@@ -1,0 +1,23 @@
+{
+  "name": "ghost",
+  "description": "Just a blogging platform.",
+  "main": "./core/index",
+  "authors": [
+    "https://github.com/TryGhost/Ghost/graphs/contributors"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "ghost",
+    "blog",
+    "cms"
+  ],
+  "homepage": "https://github.com/rpalstra/Ghost",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
