@@ -14,10 +14,15 @@ config = {
         url: 'http://ghost.palstra.com',
         mail: {},
         database: {
-            client: 'sqlite3',
+            client: 'mysql',
             connection: {
-                filename: path.join(__dirname, '/content/data/ghost.db')
-            },
+                host     : process.env.GHOST_DB_HOST,
+                user     : process.env.GHOST_DB_USER,
+                password : process.env.GHOST_DB_PASSWORD,
+                database : process.env.GHOST_DB_NAME,
+                charset  : 'utf8'
+            }
+
             debug: false
         },
 
