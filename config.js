@@ -22,8 +22,6 @@ config = {
                 database : process.env.GHOST_DB_NAME,
                 charset  : 'utf8'
             }
-
-            debug: false
         },
 
         server: {
