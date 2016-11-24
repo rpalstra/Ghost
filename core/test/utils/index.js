@@ -7,7 +7,7 @@ var Promise       = require('bluebird'),
     db            = require('../../server/data/db'),
     migration     = require('../../server/data/migration/'),
     fixtureUtils  = require('../../server/data/migration/fixtures/utils'),
-    Models        = require('../../server/models'),
+    models        = require('../../server/models'),
     SettingsAPI   = require('../../server/api/settings'),
     permissions   = require('../../server/permissions'),
     sequence      = require('../../server/utils/sequence'),
@@ -237,6 +237,16 @@ fixtures = {
         });
     },
 
+    createUsersWithRolesWithoutOwner: function createUsersWithRolesWithoutOwner() {
+        var usersWithoutOwner = DataGenerator.forKnex.users.slice(1);
+
+        return db.knex('roles').insert(DataGenerator.forKnex.roles).then(function () {
+            return db.knex('users').insert(usersWithoutOwner);
+        }).then(function () {
+            return db.knex('roles_users').insert(DataGenerator.forKnex.roles_users);
+        });
+    },
+
     createExtraUsers: function createExtraUsers() {
         // grab 3 more users
         var extraUsers = DataGenerator.Content.users.slice(2, 5);
@@ -380,7 +390,7 @@ fixtures = {
 
 /** Test Utility Functions **/
 initData = function initData() {
-    return migration.init();
+    return migration.populate();
 };
 
 clearData = function clearData() {
@@ -412,9 +422,10 @@ toDoList = {
     tags: function insertMoreTags() { return fixtures.insertMoreTags(); },
     apps: function insertApps() { return fixtures.insertApps(); },
     settings: function populateSettings() {
-        return Models.Settings.populateDefaults().then(function () { return SettingsAPI.updateSettingsCache(); });
+        return models.Settings.populateDefaults().then(function () { return SettingsAPI.updateSettingsCache(); });
     },
     'users:roles': function createUsersWithRoles() { return fixtures.createUsersWithRoles(); },
+    'users:roles:no-owner': function createUsersWithRoles() { return fixtures.createUsersWithRolesWithoutOwner(); },
     users: function createExtraUsers() { return fixtures.createExtraUsers(); },
     'user:token': function createTokensForUser() { return fixtures.createTokensForUser(); },
     owner: function insertOwnerUser() { return fixtures.insertOwnerUser(); },
@@ -448,7 +459,7 @@ getFixtureOps = function getFixtureOps(toDos) {
     // Database initialisation
     if (toDos.init || toDos.default) {
         fixtureOps.push(function initDB() {
-            return migration.init(tablesOnly);
+            return migration.populate({tablesOnly: tablesOnly});
         });
 
         delete toDos.default;
@@ -496,7 +507,7 @@ setup = function setup() {
         args = arguments;
 
     return function setup(done) {
-        Models.init();
+        models.init();
 
         if (done) {
             initFixtures.apply(self, args).then(function () {
@@ -522,6 +533,7 @@ doAuth = function doAuth() {
 
     // Remove request from this list
     delete options[0];
+
     // No DB setup, but override the owner
     options = _.merge({'owner:post': true}, _.transform(options, function (result, val) {
         if (val) {
@@ -537,7 +549,7 @@ doAuth = function doAuth() {
 };
 
 login = function login(request) {
-    var user = DataGenerator.forModel.users[0];
+    var user = DataGenerator.forModel.users[request.userIndex || 0];
 
     return new Promise(function (resolve, reject) {
         request.post('/ghost/api/v0.1/authentication/token/')

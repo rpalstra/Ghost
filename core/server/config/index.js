@@ -96,7 +96,6 @@ ConfigManager.prototype.set = function (config) {
         activeStorageAdapter,
         activeSchedulingAdapter,
         contentPath,
-        storagePath,
         schedulingPath,
         subdir,
         assetHash;
@@ -116,6 +115,15 @@ ConfigManager.prototype.set = function (config) {
     // Special case for the them.navigation JSON object, which should be overridden not merged
     if (config && config.theme && config.theme.navigation) {
         this._config.theme.navigation = config.theme.navigation;
+    }
+
+    // Special case for theme.timezone, which should be overridden not merged
+    if (config && config.theme && config.theme.timezone) {
+        this._config.theme.timezone = config.theme.timezone;
+    } else {
+        // until we have set the timezone from settings, we use the default
+        this._config.theme = this._config.theme ? this._config.theme : {};
+        this._config.theme.timezone = 'Etc/UTC';
     }
 
     // Protect against accessing a non-existant object.
@@ -153,11 +161,25 @@ ConfigManager.prototype.set = function (config) {
     this._config.scheduling = this._config.scheduling || {};
     activeSchedulingAdapter = this._config.scheduling.active || defaultSchedulingAdapter;
 
-    // we support custom adapters located in content folder
-    if (activeStorageAdapter === defaultStorageAdapter) {
-        storagePath = path.join(corePath, '/server/storage/');
+    // storage.active can be an object like {images: 'my-custom-image-storage-adapter', themes: 'local-file-storage'}
+    // we ensure that passing a string to storage.active still works, but internal it's always an object
+    if (_.isString(activeStorageAdapter)) {
+        this._config.storage = _.merge(this._config.storage, {
+            active: {
+                images: activeStorageAdapter,
+                themes: defaultStorageAdapter
+            }
+        });
     } else {
-        storagePath = path.join(contentPath, 'storage');
+        // ensure there is a default image storage adapter
+        if (!this._config.storage.active.images) {
+            this._config.storage.active.images = defaultSchedulingAdapter;
+        }
+
+        // ensure there is a default theme storage adapter
+        if (!this._config.storage.active.themes) {
+            this._config.storage.active.themes = defaultSchedulingAdapter;
+        }
     }
 
     if (activeSchedulingAdapter === defaultSchedulingAdapter) {
@@ -175,7 +197,10 @@ ConfigManager.prototype.set = function (config) {
             configExample:    path.join(appRoot, 'config.example.js'),
             corePath:         corePath,
 
-            storage:          path.join(storagePath, activeStorageAdapter),
+            storagePath: {
+                default: path.join(corePath, '/server/storage/'),
+                custom:  path.join(contentPath, 'storage/')
+            },
 
             contentPath:      contentPath,
             themePath:        path.resolve(contentPath, 'themes'),
@@ -191,19 +216,14 @@ ConfigManager.prototype.set = function (config) {
             availableApps:    this._config.paths.availableApps || {},
             clientAssets:     path.join(corePath, '/built/assets/')
         },
+        maintenance: {},
         scheduling: {
             active: activeSchedulingAdapter,
             path: schedulingPath
         },
-        storage: {
-            active: activeStorageAdapter
-        },
         theme: {
             // normalise the URL by removing any trailing slash
-            url: this._config.url ? this._config.url.replace(/\/$/, '') : '',
-
-            // default timezone
-            timezone: 'Etc/UTC'
+            url: this._config.url ? this._config.url.replace(/\/$/, '') : ''
         },
         routeKeywords: {
             tag: 'tag',
@@ -211,9 +231,10 @@ ConfigManager.prototype.set = function (config) {
             page: 'page',
             preview: 'p',
             private: 'private',
-            subscribe: 'subscribe'
+            subscribe: 'subscribe',
+            amp: 'amp'
         },
-        internalApps: ['private-blogging', 'subscribers'],
+        internalApps: ['private-blogging', 'subscribers', 'amp'],
         slugs: {
             // Used by generateSlug to generate slugs for posts, tags, users, ..
             // reserved slugs are reserved but can be extended/removed by apps
@@ -222,12 +243,23 @@ ConfigManager.prototype.set = function (config) {
             'category', 'dashboard', 'feed', 'ghost-admin', 'login', 'logout',
             'page', 'pages', 'post', 'posts', 'public', 'register', 'setup',
             'signin', 'signout', 'signup', 'user', 'users', 'wp-admin', 'wp-login'],
-            protected: ['ghost', 'rss']
+            protected: ['ghost', 'rss', 'amp']
         },
+        // used in middleware/validation/upload.js
+        // if we finish the data/importer logic, each type selects an importer
         uploads: {
-            // Used by the upload API to limit uploads to images
-            extensions: ['.jpg', '.jpeg', '.gif', '.png', '.svg', '.svgz'],
-            contentTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml']
+            subscribers: {
+                extensions: ['.csv'],
+                contentTypes: ['text/csv','application/csv']
+            },
+            images: {
+                extensions: ['.jpg', '.jpeg', '.gif', '.png', '.svg', '.svgz'],
+                contentTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml']
+            },
+            db: {
+                extensions: ['.json'],
+                contentTypes: ['application/octet-stream', 'application/json']
+            }
         },
         deprecatedItems: ['updateCheck', 'mail.fromaddress'],
         // create a hash for cache busting assets

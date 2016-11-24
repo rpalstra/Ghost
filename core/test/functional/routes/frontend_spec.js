@@ -180,6 +180,62 @@ describe('Frontend Routing', function () {
             });
         });
 
+        describe('AMP post', function () {
+            it('should redirect without slash', function (done) {
+                request.get('/welcome-to-ghost/amp')
+                    .expect('Location', '/welcome-to-ghost/amp/')
+                    .expect('Cache-Control', testUtils.cacheRules.year)
+                    .expect(301)
+                    .end(doEnd(done));
+            });
+
+            it('should redirect uppercase', function (done) {
+                request.get('/Welcome-To-Ghost/AMP/')
+                    .expect('Location', '/welcome-to-ghost/amp/')
+                    .expect('Cache-Control', testUtils.cacheRules.year)
+                    .expect(301)
+                    .end(doEnd(done));
+            });
+
+            it('should respond with html for valid url', function (done) {
+                request.get('/welcome-to-ghost/amp/')
+                    .expect('Content-Type', /html/)
+                    .expect('Cache-Control', testUtils.cacheRules.public)
+                    .expect(200)
+                    .end(function (err, res) {
+                        if (err) {
+                            return done(err);
+                        }
+
+                        var $ = cheerio.load(res.text);
+
+                        should.not.exist(res.headers['x-cache-invalidate']);
+                        should.not.exist(res.headers['X-CSRF-Token']);
+                        should.not.exist(res.headers['set-cookie']);
+                        should.exist(res.headers.date);
+
+                        $('title').text().should.equal('Welcome to Ghost');
+                        $('.content .post').length.should.equal(1);
+                        $('.poweredby').text().should.equal('Proudly published with Ghost');
+                        $('body.amp-template').length.should.equal(1);
+                        $('article.post').length.should.equal(1);
+
+                        done();
+                    });
+            });
+
+            it('should not work with date permalinks', function (done) {
+                // get today's date
+                var date  = moment().format('YYYY/MM/DD');
+
+                request.get('/' + date + '/welcome-to-ghost/amp/')
+                    .expect('Cache-Control', testUtils.cacheRules.private)
+                    .expect(404)
+                    .expect(/Page not found/)
+                    .end(doEnd(done));
+            });
+        });
+
         describe('Static assets', function () {
             it('should retrieve theme assets', function (done) {
                 request.get('/assets/css/screen.css')
@@ -239,6 +295,42 @@ describe('Frontend Routing', function () {
                 .expect('Cache-Control', testUtils.cacheRules.public)
                 .expect(200)
                 .end(doEnd(done));
+        });
+
+        describe('edit', function () {
+            it('should redirect without slash', function (done) {
+                request.get('/static-page-test/edit')
+                    .expect('Location', '/static-page-test/edit/')
+                    .expect('Cache-Control', testUtils.cacheRules.year)
+                    .expect(301)
+                    .end(doEnd(done));
+            });
+
+            it('should redirect to editor', function (done) {
+                request.get('/static-page-test/edit/')
+                    .expect('Location', /^\/ghost\/editor\/[0-9]\/$/)
+                    .expect('Cache-Control', testUtils.cacheRules.public)
+                    .expect(302)
+                    .end(doEnd(done));
+            });
+
+            it('should 404 for non-edit parameter', function (done) {
+                request.get('/static-page-test/notedit/')
+                    .expect('Cache-Control', testUtils.cacheRules.private)
+                    .expect(404)
+                    .expect(/Page not found/)
+                    .end(doEnd(done));
+            });
+        });
+
+        describe('amp', function () {
+            it('should 404 for amp parameter', function (done) {
+                request.get('/static-page-test/amp/')
+                    .expect('Cache-Control', testUtils.cacheRules.private)
+                    .expect(404)
+                    .expect(/Page not found/)
+                    .end(doEnd(done));
+            });
         });
     });
 
@@ -337,9 +429,9 @@ describe('Frontend Routing', function () {
                 .end(doEnd(done));
         });
 
-        it('http://localhost/blog should 303 to  http://localhost/blog/', function (done) {
+        it('http://localhost/blog should 301 to  http://localhost/blog/', function (done) {
             request.get('/blog')
-                .expect(303)
+                .expect(301)
                 .expect('Location', '/blog/')
                 .end(doEnd(done));
         });
@@ -381,6 +473,7 @@ describe('Frontend Routing', function () {
 
     describe('Subdirectory (with slash)', function () {
         var forkedGhost, request;
+
         before(function (done) {
             var configTest = testUtils.fork.config();
             configTest.url = 'http://localhost/blog/';
@@ -413,9 +506,9 @@ describe('Frontend Routing', function () {
                 .end(doEnd(done));
         });
 
-        it('/blog should 303 to /blog/', function (done) {
+        it('/blog should 301 to /blog/', function (done) {
             request.get('/blog')
-                .expect(303)
+                .expect(301)
                 .expect('Location', '/blog/')
                 .end(doEnd(done));
         });
@@ -466,6 +559,7 @@ describe('Frontend Routing', function () {
     // we'll use X-Forwarded-Proto: https to simulate an 'https://' request behind a proxy
     describe('HTTPS', function () {
         var forkedGhost, request;
+
         before(function (done) {
             var configTestHttps = testUtils.fork.config();
             configTestHttps.forceAdminSSL = {redirect: false};
@@ -566,6 +660,8 @@ describe('Frontend Routing', function () {
     });
 
     describe('Site Map', function () {
+        before(testUtils.teardown);
+
         before(function (done) {
             testUtils.initData().then(function () {
                 return testUtils.fixtures.insertPostsAndTags();

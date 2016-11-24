@@ -27,8 +27,10 @@ var bodyParser      = require('body-parser'),
     staticTheme      = require('./static-theme'),
     themeHandler     = require('./theme-handler'),
     uncapitalise     = require('./uncapitalise'),
+    maintenance     = require('./maintenance'),
     versionMatch     = require('./api/version-match'),
     cors             = require('./cors'),
+    validation       = require('./validation'),
     netjet           = require('netjet'),
     labs             = require('./labs'),
     helpers          = require('../helpers'),
@@ -41,6 +43,7 @@ var bodyParser      = require('body-parser'),
 
 middleware = {
     upload: multer({dest: tmpdir()}),
+    validation: validation,
     cacheControl: cacheControl,
     spamPrevention: spamPrevention,
     oauth: oauth,
@@ -52,7 +55,8 @@ middleware = {
         errorHandler: errors.handleAPIError,
         cors: cors,
         labs: labs,
-        versionMatch: versionMatch
+        versionMatch: versionMatch,
+        maintenance: maintenance
     }
 };
 
@@ -106,6 +110,7 @@ setupMiddleware = function setupMiddleware(blogApp) {
             }
         }));
     }
+
     // Favicon
     blogApp.use(serveSharedFile('favicon.ico', 'image/x-icon', utils.ONE_DAY_S));
 
@@ -194,8 +199,13 @@ setupMiddleware = function setupMiddleware(blogApp) {
 
     // Mount admin express app to /ghost and set up routes
     adminApp.use(redirectToSetup);
+    adminApp.use(maintenance);
     adminApp.use(routes.admin());
+
     blogApp.use('/ghost', adminApp);
+
+    // send 503 error page in case of maintenance
+    blogApp.use(maintenance);
 
     // Set up Frontend routes (including private blogging routes)
     blogApp.use(routes.frontend());

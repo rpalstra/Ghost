@@ -25,6 +25,9 @@
                 "mail": {
                     "invitedByName": "{invitedByName} has invited you to join {blogName}"
                 }
+            },
+            "clients": {
+                "clientNotFound": "Client not found"
             }
         }
     },
@@ -170,6 +173,7 @@
             }
         },
         "general": {
+            "maintenance": "Ghost is currently undergoing maintenance, please wait a moment then retry.",
             "moreInfo": "\nMore info: {info}",
             "requiredOnFuture": "This will be required in future. Please see {link}"
         },
@@ -305,10 +309,10 @@
                 "invalidKey": "Invalid key"
             },
             "db": {
+                "missingFile": "Please select a database file to import.",
+                "invalidFile": "Unsupported file. Please try any of the following formats: {extensions}",
                 "noPermissionToExportData": "You do not have permission to export data (no rights).",
-                "noPermissionToImportData": "You do not have permission to import data (no rights).",
-                "selectFileToImport": "Please select a file to import.",
-                "unsupportedFile": "Unsupported file. Please try any of the following formats: "
+                "noPermissionToImportData": "You do not have permission to import data (no rights)."
             },
             "mail": {
                 "noPermissionToSendEmail": "You do not have permission to send mail.",
@@ -342,6 +346,8 @@
                 "unknownSlugType": "Unknown slug type '{type}'."
             },
             "subscribers": {
+                "missingFile": "Please select a csv.",
+                "invalidFile": "Please select a valid CSV file to import.",
                 "subscriberNotFound": "Subscriber not found.",
                 "subscriberAlreadyExists": "Email address is already subscribed."
             },
@@ -354,9 +360,9 @@
                 "themeDoesNotExist": "Theme does not exist.",
                 "invalidRequest": "Invalid request."
             },
-            "upload": {
-                "pleaseSelectImage": "Please select an image.",
-                "pleaseSelectValidImage": "Please select a valid image."
+            "images": {
+                "missingFile": "Please select an image.",
+                "invalidFile": "Please select a valid image."
             },
             "users": {
                 "userNotFound": "User not found.",
@@ -419,10 +425,10 @@
             "versioning": {
                 "index": {
                     "dbVersionNotRecognized": "Database version is not recognized",
-                    "settingsTableDoesNotExist": "Settings table does not exist",
+                    "databaseNotPopulated": "Database is not populated.",
                     "cannotMigrate": {
-                        "error": "Unable to upgrade from version 0.4.2 or earlier",
-                        "context": "Please upgrade to 0.7.1 first"
+                        "error": "Unable to upgrade from version 0.4.2 or earlier.",
+                        "context": "Please upgrade to 0.7.1 first."
                     }
                 }
             },
