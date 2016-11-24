@@ -7,17 +7,19 @@ var should = require('should'),
     rewire = require('rewire'),
     _ = require('lodash'),
     config = require('../../../../server/config'),
-    testUtils = require(config.paths.corePath + '/test/utils'),
-    events = require(config.paths.corePath + '/server/events'),
-    models = require(config.paths.corePath + '/server/models');
+    testUtils = require(config.get('paths').corePath + '/test/utils'),
+    events = require(config.get('paths').corePath + '/server/events'),
+    models = require(config.get('paths').corePath + '/server/models');
 
 describe('Models: listeners', function () {
     var eventsToRemember = {},
+        now = moment(),
         scope = {
             posts: [],
             publishedAtFutureMoment1: moment().add(2, 'days').startOf('hour'),
             publishedAtFutureMoment3: moment().add(10, 'hours').startOf('hour'),
-            timezoneOffset: -480,
+            // calculate the offset dynamically, because of DST
+            timezoneOffset: moment.tz.zone('Europe/London').offset(now) - moment.tz.zone('America/Los_Angeles').offset(now),
             newTimezone: 'America/Los_Angeles',
             oldTimezone: 'Europe/London'
         };
@@ -30,7 +32,7 @@ describe('Models: listeners', function () {
             eventsToRemember[eventName] = callback;
         });
 
-        rewire(config.paths.corePath + '/server/models/base/listeners');
+        rewire(config.get('paths').corePath + '/server/models/base/listeners');
     });
 
     afterEach(function (done) {

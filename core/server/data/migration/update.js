@@ -1,25 +1,34 @@
 // # Update Database
 // Handles migrating a database between two different database versions
 var Promise = require('bluebird'),
+    _ = require('lodash'),
     backup = require('./backup'),
     fixtures = require('./fixtures'),
     errors = require('../../errors'),
+    logging = require('../../logging'),
     i18n = require('../../i18n'),
     db = require('../../data/db'),
-    sequence = require('../../utils/sequence'),
     versioning = require('../schema').versioning,
-
+    sequence = function sequence(tasks, modelOptions, logger) {
+        // utils/sequence.js does not offer an option to pass cloned arguments
+        return Promise.reduce(tasks, function (results, task) {
+            return task(_.cloneDeep(modelOptions), logger)
+                .then(function (result) {
+                    results.push(result);
+                    return results;
+                });
+        }, []);
+    },
     updateDatabaseSchema,
     migrateToDatabaseVersion,
     execute, logger, isDatabaseOutOfDate;
 
-// @TODO: remove me asap!
 logger = {
     info: function info(message) {
-        errors.logComponentInfo('Migrations', message);
+        logging.info('Migrations:' + message);
     },
     warn: function warn(message) {
-        errors.logComponentWarn('Skipping Migrations', message);
+        logging.warn('Skipping Migrations:' + message);
     }
 };
 
@@ -45,9 +54,7 @@ migrateToDatabaseVersion = function migrateToDatabaseVersion(version, logger, mo
             var migrationTasks = versioning.getUpdateDatabaseTasks(version, logger),
                 fixturesTasks = versioning.getUpdateFixturesTasks(version, logger);
 
-            logger.info('###########');
             logger.info('Updating database to ' + version);
-            logger.info('###########\n');
 
             modelOptions.transacting = transaction;
 
@@ -98,6 +105,7 @@ execute = function execute(options) {
 
     return backup(logger)
         .then(function () {
+            logger.info('Migration required from ' + fromVersion + ' to ' + toVersion);
             return Promise.mapSeries(versionsToUpdate, function (versionToUpdate) {
                 return migrateToDatabaseVersion(versionToUpdate, logger, modelOptions);
             });
@@ -116,11 +124,13 @@ isDatabaseOutOfDate = function isDatabaseOutOfDate(options) {
 
     // CASE: current database version is lower then we support
     if (fromVersion < versioning.canMigrateFromVersion) {
-        return {error: new errors.DatabaseVersion(
-            i18n.t('errors.data.versioning.index.cannotMigrate.error'),
-            i18n.t('errors.data.versioning.index.cannotMigrate.context'),
-            i18n.t('common.seeLinkForInstructions', {link: 'http://support.ghost.org/how-to-upgrade/'})
-        )};
+        return {
+            error: new errors.DatabaseVersionError({
+                message: i18n.t('errors.data.versioning.index.cannotMigrate.error'),
+                context: i18n.t('errors.data.versioning.index.cannotMigrate.context'),
+                help: i18n.t('common.seeLinkForInstructions', {link: 'http://support.ghost.org/how-to-upgrade/'})
+            })
+        };
     }
     // CASE: the database exists but is out of date
     else if (fromVersion < toVersion || forceMigration) {
@@ -132,7 +142,7 @@ isDatabaseOutOfDate = function isDatabaseOutOfDate(options) {
     }
     // CASE: we don't understand the version
     else {
-        return {error: new errors.DatabaseVersion(i18n.t('errors.data.versioning.index.dbVersionNotRecognized'))};
+        return {error: new errors.DatabaseVersionError({message: i18n.t('errors.data.versioning.index.dbVersionNotRecognized')})};
     }
 };
 

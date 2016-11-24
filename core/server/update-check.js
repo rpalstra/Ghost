@@ -12,7 +12,7 @@
 // - node version
 // - npm version
 // - env - production or development
-// - database type - SQLite, MySQL, PostgreSQL
+// - database type - SQLite, MySQL
 // - email transport - mail.options.service, or otherwise mail.transport
 // - created date - database creation date
 // - post count - total number of posts
@@ -28,27 +28,27 @@ var crypto   = require('crypto'),
     Promise  = require('bluebird'),
     _        = require('lodash'),
     url      = require('url'),
-
     api      = require('./api'),
     config   = require('./config'),
+    logging  = require('./logging'),
     errors   = require('./errors'),
     i18n     = require('./i18n'),
+    currentVersion = require('./utils/ghost-version').full,
     internal = {context: {internal: true}},
     allowedCheckEnvironments = ['development', 'production'],
-    checkEndpoint = 'updates.ghost.org',
-    currentVersion = config.ghostVersion;
+    checkEndpoint = 'updates.ghost.org';
 
-function updateCheckError(error) {
+function updateCheckError(err) {
     api.settings.edit(
         {settings: [{key: 'nextUpdateCheck', value: Math.round(Date.now() / 1000 + 24 * 3600)}]},
         internal
     );
 
-    errors.logError(
-        error,
-        i18n.t('errors.update-check.checkingForUpdatesFailed.error'),
-        i18n.t('errors.update-check.checkingForUpdatesFailed.help', {url: 'http://support.ghost.org'})
-    );
+    logging.error(new errors.GhostError({
+        err: err,
+        context: i18n.t('errors.update-check.checkingForUpdatesFailed.error'),
+        help: i18n.t('errors.update-check.checkingForUpdatesFailed.help', {url: 'http://support.ghost.org'})
+    }));
 }
 
 /**
@@ -62,8 +62,8 @@ function createCustomNotification(message) {
     }
 
     var notification = {
+        status: 'alert',
         type: 'info',
-        location: 'top',
         custom: true,
         uuid: message.id,
         dismissible: true,
@@ -73,7 +73,7 @@ function createCustomNotification(message) {
     getSeenNotifications = api.settings.read(_.extend({key: 'seenNotifications'}, internal));
 
     return Promise.join(getAllNotifications, getSeenNotifications, function joined(all, seen) {
-        var isSeen      = _.includes(JSON.parse(seen.settings[0].value || []), notification.uuid),
+        var isSeen      = _.includes(JSON.parse(seen.settings[0].value || []), notification.id),
             isDuplicate = _.some(all.notifications, {message: notification.message});
 
         if (!isSeen && !isDuplicate) {
@@ -84,12 +84,12 @@ function createCustomNotification(message) {
 
 function updateCheckData() {
     var data = {},
-        mailConfig = config.mail;
+        mailConfig = config.get('mail');
 
     data.ghost_version   = currentVersion;
     data.node_version    = process.versions.node;
     data.env             = process.env.NODE_ENV;
-    data.database_type   = config.database.client;
+    data.database_type   = config.get('database').client;
     data.email_transport = mailConfig &&
     (mailConfig.options && mailConfig.options.service ?
         mailConfig.options.service :
@@ -116,7 +116,7 @@ function updateCheckData() {
             posts            = descriptors.posts.value(),
             users            = descriptors.users.value(),
             npm              = descriptors.npm.value(),
-            blogUrl          = url.parse(config.url),
+            blogUrl          = url.parse(config.get('url')),
             blogId           = blogUrl.hostname + blogUrl.pathname.replace(/\//, '') + hash.value;
 
         data.blog_id         = crypto.createHash('md5').update(blogId).digest('hex');
@@ -212,7 +212,7 @@ function updateCheck() {
     // 2. we've already done a check this session
     // 3. we're not in production or development mode
     // TODO: need to remove config.updateCheck in favor of config.privacy.updateCheck in future version (it is now deprecated)
-    if (config.updateCheck === false || config.isPrivacyDisabled('useUpdateCheck') || _.indexOf(allowedCheckEnvironments, process.env.NODE_ENV) === -1) {
+    if (config.get('updateCheck') === false || config.isPrivacyDisabled('useUpdateCheck') || _.indexOf(allowedCheckEnvironments, process.env.NODE_ENV) === -1) {
         // No update check
         return Promise.resolve();
     } else {

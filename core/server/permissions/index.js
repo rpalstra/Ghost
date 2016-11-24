@@ -56,14 +56,14 @@ function parseContext(context) {
 }
 
 function applyStatusRules(docName, method, opts) {
-    var errorMsg = i18n.t('errors.permissions.applyStatusRules.error', {docName: docName});
+    var err = new errors.NoPermissionError({message: i18n.t('errors.permissions.applyStatusRules.error', {docName: docName})});
 
     // Enforce status 'active' for users
     if (docName === 'users') {
         if (!opts.status) {
             return 'active';
         } else if (opts.status !== 'active') {
-            throw errorMsg;
+            throw err;
         }
     }
 
@@ -80,7 +80,7 @@ function applyStatusRules(docName, method, opts) {
             return opts.status;
         } else if (opts.status !== 'published') {
             // any other parameter would make this a permissions error
-            throw errorMsg;
+            throw err;
         }
     }
 
@@ -202,7 +202,7 @@ CanThisResult.prototype.buildObjectTypeHandlers = function (objTypes, actType, c
                     return;
                 }
 
-                return Promise.reject(new errors.NoPermissionError(i18n.t('errors.permissions.noPermissionToAction')));
+                return Promise.reject(new errors.NoPermissionError({message: i18n.t('errors.permissions.noPermissionToAction')}));
             });
         };
 
@@ -273,9 +273,11 @@ canThis = function (context) {
     return result.beginCheck(context);
 };
 
-init = refresh = function () {
+init = refresh = function (options) {
+    options = options || {};
+
     // Load all the permissions
-    return Models.Permission.findAll().then(function (perms) {
+    return Models.Permission.findAll(options).then(function (perms) {
         var seenActions = {};
 
         exported.actionsMap = {};

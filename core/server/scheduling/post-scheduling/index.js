@@ -1,6 +1,6 @@
 var Promise = require('bluebird'),
     moment = require('moment'),
-    utils = require(__dirname + '/../utils'),
+    localUtils = require(__dirname + '/../utils'),
     events = require(__dirname + '/../../events'),
     errors = require(__dirname + '/../../errors'),
     models = require(__dirname + '/../../models'),
@@ -27,12 +27,10 @@ _private.loadClient = function loadClient() {
 };
 
 _private.loadScheduledPosts = function () {
-    return schedules.getScheduledPosts({
-        from: moment().subtract(7, 'days').startOf('day').toDate(),
-        to: moment().endOf('day').toDate()
-    }).then(function (result) {
-        return result.posts || [];
-    });
+    return schedules.getScheduledPosts()
+        .then(function (result) {
+            return result.posts || [];
+        });
 };
 
 exports.init = function init(options) {
@@ -42,18 +40,18 @@ exports.init = function init(options) {
         client = null;
 
     if (!config) {
-        return Promise.reject(new errors.IncorrectUsage('post-scheduling: no config was provided'));
+        return Promise.reject(new errors.IncorrectUsageError({message: 'post-scheduling: no config was provided'}));
     }
 
     if (!apiUrl) {
-        return Promise.reject(new errors.IncorrectUsage('post-scheduling: no apiUrl was provided'));
+        return Promise.reject(new errors.IncorrectUsageError({message: 'post-scheduling: no apiUrl was provided'}));
     }
 
     return _private.loadClient()
         .then(function (_client) {
             client = _client;
 
-            return utils.createAdapter(config);
+            return localUtils.createAdapter(config);
         })
         .then(function (_adapter) {
             adapter = _adapter;

@@ -4,7 +4,7 @@ var testUtils     = require('../../../utils'),
     path          = require('path'),
     fs            = require('fs-extra'),
     supertest     = require('supertest'),
-    ghost         = require('../../../../../core'),
+    ghost         = testUtils.startGhost,
     config        = require('../../../../../core/server/config'),
     request;
 
@@ -27,7 +27,7 @@ describe('Upload API', function () {
 
     after(function (done) {
         images.forEach(function (image) {
-            fs.removeSync(config.paths.appRoot + image);
+            fs.removeSync(config.get('paths').appRoot + image);
         });
 
         testUtils.clearData().then(function () {
@@ -89,6 +89,7 @@ describe('Upload API', function () {
         it('import should fail without file', function (done) {
             request.post(testUtils.API.getApiQuery('uploads'))
                 .set('Authorization', 'Bearer ' + accesstoken)
+                .set('Accept', 'application/json')
                 .expect('Content-Type', /json/)
                 .expect(403)
                 .end(function (err) {

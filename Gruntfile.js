@@ -5,12 +5,13 @@
 // **Usage instructions:** can be found in the [Custom Tasks](#custom%20tasks) section or by running `grunt --help`.
 //
 // **Debug tip:** If you have any problems with any Grunt tasks, try running them with the `--verbose` command
-var _              = require('lodash'),
+
+// jshint unused: false
+var overrides      = require('./core/server/overrides'),
+    _              = require('lodash'),
     chalk          = require('chalk'),
     fs             = require('fs-extra'),
     path           = require('path'),
-    Promise        = require('bluebird'),
-    Git            = require('git-wrapper'),
 
     escapeChar     = process.platform.match(/^win/) ? '^' : '\\',
     cwd            = process.cwd().replace(/( |\(|\))/g, escapeChar + '$1'),
@@ -134,7 +135,7 @@ var _              = require('lodash'),
                 options: {
                     ui: 'bdd',
                     reporter: grunt.option('reporter') || 'spec',
-                    timeout: '15000',
+                    timeout: '30000',
                     save: grunt.option('reporter-output'),
                     require: ['core/server/overrides']
                 },
@@ -279,7 +280,7 @@ var _              = require('lodash'),
                     },
                     expand: true,
                     cwd: '<%= paths.releaseBuild %>/',
-                    src: ['**']
+                    src: ['**', '.knex-migrator']
                 }
             },
 
@@ -404,25 +405,6 @@ var _              = require('lodash'),
                 cfg.express.test.options.node_env = process.env.NODE_ENV;
             });
 
-        // #### Ensure Config *(Utility Task)*
-        // Make sure that we have a `config.js` file when running tests
-        // Ghost requires a `config.js` file to specify the database settings etc. Ghost comes with an example file:
-        // `config.example.js` which is copied and renamed to `config.js` by the bootstrap process
-        grunt.registerTask('ensureConfig', function () {
-            var config = require('./core/server/config'),
-                done = this.async();
-
-            if (!process.env.TEST_SUITE || process.env.TEST_SUITE !== 'client') {
-                config.load().then(function () {
-                    done();
-                }).catch(function (err) {
-                    grunt.fail.fatal(err.stack);
-                });
-            } else {
-                done();
-            }
-        });
-
         // #### Reset Database to "New" state *(Utility Task)*
         // Drops all database tables and then runs the migration process to put the database
         // in a "new" state.
@@ -535,7 +517,7 @@ var _              = require('lodash'),
         // ### test-setup *(utility)(
         // `grunt test-setup` will run all the setup tasks required for running tests
         grunt.registerTask('test-setup', 'Setup ready to run tests',
-            ['clean:test', 'setTestEnv', 'ensureConfig']
+            ['clean:test', 'setTestEnv']
         );
 
         // ### Unit Tests *(sub task)*
@@ -577,8 +559,8 @@ var _              = require('lodash'),
         // `grunt test:integration/api/api_tags_spec.js`
         //
         // Their purpose is to test that both the api and models behave as expected when the database layer is involved.
-        // These tests are run against sqlite3, mysql and pg on travis and ensure that differences between the databases
-        // don't cause bugs. At present, pg often fails and is not officially supported.
+        // These tests are run against sqlite3 and mysql on travis and ensure that differences between the databases
+        // don't cause bugs.
         //
         // A coverage report can be generated for these tests using the `grunt test-coverage` task.
         grunt.registerTask('test-integration', 'Run integration tests (mocha + db access)',
@@ -701,6 +683,10 @@ var _              = require('lodash'),
         grunt.registerTask('prod', 'Build JS & templates for production',
             ['subgrunt:prod', 'uglify:prod', 'master-warn']);
 
+        grunt.registerTask('deps', 'Prepare dependencies',
+            ['shell:dedupe', 'shell:prune', 'shell:shrinkwrap']
+        );
+
         // ### Live reload
         // `grunt dev` - build assets on the fly whilst developing
         //
@@ -714,78 +700,6 @@ var _              = require('lodash'),
         // Note that the current implementation of watch only works with casper, not other themes.
         grunt.registerTask('dev', 'Dev Mode; watch files and restart server on changes',
            ['bgShell:client', 'express:dev', 'watch']);
-
-        // ### Contributors
-        // `grunt contributors:<tag-name>` - generate a comma-separated list of contributors for a Ghost release.
-        //
-        // You must supply a tag name to us
-        //
-        grunt.registerTask('contributors', 'Generate a list of contributors for a release', function () {
-            var getContribList = require('gh-contrib-list'),
-                oauthKey = process.env.GITHUB_OAUTH_KEY,
-                thisGit = new Git(),
-                clientGit = new Git({'git-dir': path.resolve(cwd + '/core/client/.git')}),
-                done = this.async();
-
-            function mergeContribs(first, second) {
-                _.each(second, function (contributor) {
-                    var contributorInFirst = _.find(first, ['id', contributor.id]);
-
-                    if (contributorInFirst) {
-                        contributorInFirst.commitCount += contributor.commitCount;
-                    } else {
-                        first.push(contributor);
-                    }
-                });
-
-                return _.orderBy(first, ['commitCount'], ['desc']);
-            }
-
-            if (!this.args) {
-                grunt.log.error('You must supply a tag name. Please run like this: `grunt contributors:<tag-name>`');
-            }
-
-            return Promise.props({
-                ghost: Promise.promisify(thisGit.exec, {context: thisGit})('rev-list', {n: 1}, this.args),
-                admin: Promise.promisify(clientGit.exec, {context: clientGit})('rev-list', {n: 1}, this.args)
-            }).then(function (props) {
-                return Promise.join(
-                    getContribList({
-                        user: 'tryghost',
-                        repo: 'ghost',
-                        oauthKey: oauthKey,
-                        commit: props.ghost.trim(),
-                        removeGreenkeeper: true,
-                        retry: true
-                    }),
-                    getContribList({
-                        user: 'tryghost',
-                        repo: 'ghost-admin',
-                        oauthKey: oauthKey,
-                        commit: props.admin.trim(),
-                        removeGreenkeeper: true,
-                        retry: true
-                    })
-                );
-            }).then(function (results) {
-                var contributors = mergeContribs(results[0], results[1]);
-
-                grunt.log.writeln(_.map(contributors, 'name').join(', '));
-                done();
-            }).catch(function (error) {
-                grunt.log.error(error);
-
-                if (error.http_status) {
-                    grunt.log.writeln('GitHub API request returned status: ' + error.http_status);
-                }
-
-                if (error.ratelimit_limit) {
-                    grunt.log.writeln('Rate limit data: limit: %d, remaining: %d, reset: %s', error.ratelimit_limit, error.ratelimit_remaining, require('moment').unix(error.ratelimit_reset).fromNow());
-                }
-
-                done(false);
-            });
-        });
 
         // ### Release
         // Run `grunt release` to create a Ghost release zip file.
@@ -805,13 +719,13 @@ var _              = require('lodash'),
                     // A list of files and patterns to include when creating a release zip.
                     // This is read from the `.npmignore` file and all patterns are inverted as the `.npmignore`
                     // file defines what to ignore, whereas we want to define what to include.
-                    src: fs.readFileSync('.npmignore', 'utf8').split('\n').filter(Boolean).map(function (pattern) {
+                    src: ['.knex-migrator'].concat(fs.readFileSync('.npmignore', 'utf8').split('\n').filter(Boolean).map(function (pattern) {
                         return pattern[0] === '!' ? pattern.substr(1) : '!' + pattern;
-                    }),
+                    })),
                     dest: '<%= paths.releaseBuild %>/'
                 });
 
-                grunt.task.run(['init', 'prod', 'clean:release',  'shell:dedupe', 'shell:prune', 'shell:shrinkwrap', 'copy:release', 'compress:release']);
+                grunt.task.run(['init', 'prod', 'clean:release', 'deps', 'copy:release', 'compress:release']);
             }
         );
     };

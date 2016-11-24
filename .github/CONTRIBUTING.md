@@ -100,7 +100,7 @@ Any other info e.g. Why do you consider this to be a bug? What did you expect to
 * Ghost Version: master (latest commit: a761de2079dca4df49567b1bddac492f25033985)
 * Node Version: 4.4.7
 * Browser: Chrome 48.0.2564.109 on Mac OS X 10.10.4
-* Database: SQLite / MySQL / postgres
+* Database: SQLite / MySQL
 ```
 
 <a name="features"></a>
@@ -208,7 +208,7 @@ instructions below this list
 1. `npm start` - starts Ghost or `grunt dev` will start it in watch mode
 
 If something goes wrong, please see the
-[troubleshooting tips](https://github.com/TryGhost/Ghost/blob/master/CONTRIBUTING.md#troubleshooting--faq) below.
+[troubleshooting tips](https://github.com/TryGhost/Ghost/blob/master/.github/CONTRIBUTING.md#troubleshooting--faq) below.
 
 ### Looking for something to work on?
 

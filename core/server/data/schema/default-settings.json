@@ -1,7 +1,7 @@
 {
     "core": {
         "databaseVersion": {
-            "defaultValue": "006"
+            "defaultValue": null
         },
         "dbHash": {
             "defaultValue": null
@@ -14,9 +14,6 @@
         },
         "seenNotifications": {
             "defaultValue": "[]"
-        },
-        "migrations": {
-            "defaultValue": "{}"
         }
     },
     "blog": {

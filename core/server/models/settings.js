@@ -1,6 +1,5 @@
 var Settings,
     ghostBookshelf = require('./base'),
-    uuid           = require('node-uuid'),
     _              = require('lodash'),
     errors         = require('../errors'),
     Promise        = require('bluebird'),
@@ -46,7 +45,6 @@ Settings = ghostBookshelf.Model.extend({
 
     defaults: function defaults() {
         return {
-            uuid: uuid.v4(),
             type: 'core'
         };
     },
@@ -55,24 +53,22 @@ Settings = ghostBookshelf.Model.extend({
         events.emit('settings' + '.' + event, this);
     },
 
-    initialize: function initialize() {
-        ghostBookshelf.Model.prototype.initialize.apply(this, arguments);
-
-        this.on('created', function (model) {
-            model.emitChange('added');
-            model.emitChange(model.attributes.key + '.' + 'added');
-        });
-        this.on('updated', function (model) {
-            model.emitChange('edited');
-            model.emitChange(model.attributes.key + '.' + 'edited');
-        });
-        this.on('destroyed', function (model) {
-            model.emitChange('deleted');
-            model.emitChange(model.attributes.key + '.' + 'deleted');
-        });
+    onDestroyed: function onDestroyed(model) {
+        model.emitChange('deleted');
+        model.emitChange(model.attributes.key + '.' + 'deleted');
     },
 
-    validate: function validate() {
+    onCreated: function onCreated(model) {
+        model.emitChange('added');
+        model.emitChange(model.attributes.key + '.' + 'added');
+    },
+
+    onUpdated: function onUpdated(model) {
+        model.emitChange('edited');
+        model.emitChange(model.attributes.key + '.' + 'edited');
+    },
+
+    onValidate: function onValidate() {
         var self = this,
             setting = this.toJSON();
 
@@ -114,7 +110,7 @@ Settings = ghostBookshelf.Model.extend({
             // Accept an array of models as input
             if (item.toJSON) { item = item.toJSON(); }
             if (!(_.isString(item.key) && item.key.length > 0)) {
-                return Promise.reject(new errors.ValidationError(i18n.t('errors.models.settings.valueCannotBeBlank')));
+                return Promise.reject(new errors.ValidationError({message: i18n.t('errors.models.settings.valueCannotBeBlank')}));
             }
 
             item = self.filterData(item);
@@ -138,14 +134,14 @@ Settings = ghostBookshelf.Model.extend({
                     return setting.save(saveData, options);
                 }
 
-                return Promise.reject(new errors.NotFoundError(i18n.t('errors.models.settings.unableToFindSetting', {key: item.key})));
-            }, errors.logAndThrowError);
+                return Promise.reject(new errors.NotFoundError({message: i18n.t('errors.models.settings.unableToFindSetting', {key: item.key})}));
+            });
         });
     },
 
     populateDefault: function (key) {
         if (!getDefaultSettings()[key]) {
-            return Promise.reject(new errors.NotFoundError(i18n.t('errors.models.settings.unableToFindDefaultSetting', {key: key})));
+            return Promise.reject(new errors.NotFoundError({message: i18n.t('errors.models.settings.unableToFindDefaultSetting', {key: key})}));
         }
 
         return this.findOne({key: key}).then(function then(foundSetting) {
