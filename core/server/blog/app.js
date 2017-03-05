@@ -14,13 +14,15 @@ var debug = require('debug')('ghost:blog'),
 
     // local middleware
     cacheControl = require('../middleware/cache-control'),
-    checkSSL = require('../middleware/check-ssl'),
+    urlRedirects = require('../middleware/url-redirects'),
     errorHandler = require('../middleware/error-handler'),
     maintenance = require('../middleware/maintenance'),
     prettyURLs = require('../middleware/pretty-urls'),
     serveSharedFile = require('../middleware/serve-shared-file'),
     staticTheme = require('../middleware/static-theme'),
-    themeHandler = require('../middleware/theme-handler');
+    themeHandler = require('../middleware/theme-handler'),
+    customRedirects = require('../middleware/custom-redirects'),
+    serveFavicon = require('../middleware/serve-favicon');
 
 module.exports = function setupBlogApp() {
     debug('Blog setup start');
@@ -38,10 +40,14 @@ module.exports = function setupBlogApp() {
     blogApp.use(themeHandler.configHbsForContext);
     debug('Themes done');
 
+    // you can extend Ghost with a custom redirects file
+    // see https://github.com/TryGhost/Ghost/issues/7707
+    customRedirects(blogApp);
+
     // Static content/assets
     // @TODO make sure all of these have a local 404 error handler
     // Favicon
-    blogApp.use(serveSharedFile('favicon.ico', 'image/x-icon', utils.ONE_DAY_S));
+    blogApp.use(serveFavicon());
     // Ghost-Url
     blogApp.use(serveSharedFile('shared/ghost-url.js', 'application/javascript', utils.ONE_HOUR_S));
     blogApp.use(serveSharedFile('shared/ghost-url.min.js', 'application/javascript', utils.ONE_HOUR_S));
@@ -50,7 +56,7 @@ module.exports = function setupBlogApp() {
     // Serve robots.txt if not found in theme
     blogApp.use(serveSharedFile('robots.txt', 'text/plain', utils.ONE_HOUR_S));
     // Serve blog images using the storage adapter
-    blogApp.use('/content/images', storage.getStorage().serve());
+    blogApp.use('/' + utils.url.STATIC_IMAGE_URL_PREFIX, storage.getStorage().serve());
 
     // Theme static assets/files
     blogApp.use(staticTheme());
@@ -74,7 +80,7 @@ module.exports = function setupBlogApp() {
 
     // Force SSL if required
     // must happen AFTER asset loading and BEFORE routing
-    blogApp.use(checkSSL);
+    blogApp.use(urlRedirects);
 
     // Add in all trailing slashes & remove uppercase
     // must happen AFTER asset loading and BEFORE routing

@@ -1,22 +1,28 @@
 var should         = require('should'),
     hbs            = require('express-hbs'),
+    sinon          = require('sinon'),
     utils          = require('./utils'),
     configUtils    = require('../../utils/configUtils'),
-
-// Stuff we are testing
-    handlebars     = hbs.handlebars,
-    helpers        = require('../../../server/helpers');
+    helpers        = require('../../../server/helpers'),
+    settingsCache  = require('../../../server/settings/cache'),
+    sandbox        = sinon.sandbox.create(),
+    handlebars     = hbs.handlebars;
 
 describe('{{asset}} helper', function () {
-    var rendered;
+    var rendered, localSettingsCache = {};
 
     before(function () {
         utils.loadHelpers();
         configUtils.set({assetHash: 'abc'});
+
+        sandbox.stub(settingsCache, 'get', function (key) {
+            return localSettingsCache[key];
+        });
     });
 
     after(function () {
         configUtils.restore();
+        sandbox.restore();
     });
 
     it('has loaded asset helper', function () {
@@ -36,7 +42,35 @@ describe('{{asset}} helper', function () {
             String(rendered).should.equal('/favicon.ico');
         });
 
+        it('handles custom favicon correctly', function () {
+            localSettingsCache.icon = '/content/images/favicon.png';
+
+            // with ghost set and png
+            rendered = helpers.asset('favicon.png', {hash: {ghost: 'true'}});
+            should.exist(rendered);
+            String(rendered).should.equal('/favicon.ico');
+
+            // without ghost set and png
+            rendered = helpers.asset('favicon.png');
+            should.exist(rendered);
+            String(rendered).should.equal('/content/images/favicon.png');
+
+            localSettingsCache.icon = '/content/images/favicon.ico';
+
+            // with ghost set and ico
+            rendered = helpers.asset('favicon.ico', {hash: {ghost: 'true'}});
+            should.exist(rendered);
+            String(rendered).should.equal('/favicon.ico');
+
+            // without ghost set and ico
+            rendered = helpers.asset('favicon.ico');
+            should.exist(rendered);
+            String(rendered).should.equal('/content/images/favicon.ico');
+        });
+
         it('handles shared assets correctly', function () {
+            localSettingsCache.icon = '';
+
             // with ghost set
             rendered = helpers.asset('shared/asset.js', {hash: {ghost: 'true'}});
             should.exist(rendered);
@@ -80,6 +114,32 @@ describe('{{asset}} helper', function () {
             String(rendered).should.equal('/blog/favicon.ico');
         });
 
+        it('handles custom favicon correctly', function () {
+            localSettingsCache.icon = '/content/images/favicon.png';
+
+            // with ghost set and png
+            rendered = helpers.asset('favicon.png', {hash: {ghost: 'true'}});
+            should.exist(rendered);
+            String(rendered).should.equal('/blog/favicon.ico');
+
+            // without ghost set and png
+            rendered = helpers.asset('favicon.png');
+            should.exist(rendered);
+            String(rendered).should.equal('/blog/content/images/favicon.png');
+
+            localSettingsCache.icon = '/content/images/favicon.ico';
+
+            // with ghost set and ico
+            rendered = helpers.asset('favicon.ico', {hash: {ghost: 'true'}});
+            should.exist(rendered);
+            String(rendered).should.equal('/blog/favicon.ico');
+
+            // without ghost set and ico
+            rendered = helpers.asset('favicon.ico');
+            should.exist(rendered);
+            String(rendered).should.equal('/blog/content/images/favicon.ico');
+        });
+
         it('handles shared assets correctly', function () {
             // with ghost set
             rendered = helpers.asset('shared/asset.js', {hash: {ghost: 'true'}});
@@ -105,5 +165,7 @@ describe('{{asset}} helper', function () {
             should.exist(rendered);
             String(rendered).should.equal('/blog/assets/js/asset.js?v=abc');
         });
+
+        configUtils.restore();
     });
 });

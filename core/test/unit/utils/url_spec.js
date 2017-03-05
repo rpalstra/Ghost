@@ -2,9 +2,12 @@
 var should = require('should'),
     _ = require('lodash'),
     moment = require('moment'),
+    sinon = require('sinon'),
     utils = require('../../../server/utils'),
+    settingsCache = require('../../../server/settings/cache'),
     configUtils = require('../../utils/configUtils'),
     testUtils = require('../../utils'),
+    sandbox = sinon.sandbox.create(),
     config = configUtils.config;
 
 describe('Url', function () {
@@ -14,6 +17,7 @@ describe('Url', function () {
 
     afterEach(function () {
         configUtils.restore();
+        sandbox.restore();
     });
 
     describe('getProtectedSlugs', function () {
@@ -103,18 +107,22 @@ describe('Url', function () {
             configUtils.set({url: 'http://my-ghost-blog.com'});
             utils.url.urlFor(testContext).should.equal('/');
             utils.url.urlFor(testContext, true).should.equal('http://my-ghost-blog.com/');
+            utils.url.urlFor(testContext, {secure: true}, true).should.equal('https://my-ghost-blog.com/');
 
             configUtils.set({url: 'http://my-ghost-blog.com/'});
             utils.url.urlFor(testContext).should.equal('/');
             utils.url.urlFor(testContext, true).should.equal('http://my-ghost-blog.com/');
+            utils.url.urlFor(testContext, {secure: true}, true).should.equal('https://my-ghost-blog.com/');
 
             configUtils.set({url: 'http://my-ghost-blog.com/blog'});
             utils.url.urlFor(testContext).should.equal('/blog/');
             utils.url.urlFor(testContext, true).should.equal('http://my-ghost-blog.com/blog/');
+            utils.url.urlFor(testContext, {secure: true}, true).should.equal('https://my-ghost-blog.com/blog/');
 
             configUtils.set({url: 'http://my-ghost-blog.com/blog/'});
             utils.url.urlFor(testContext).should.equal('/blog/');
             utils.url.urlFor(testContext, true).should.equal('http://my-ghost-blog.com/blog/');
+            utils.url.urlFor(testContext, {secure: true}, true).should.equal('https://my-ghost-blog.com/blog/');
         });
 
         it('should return rss url when asked for', function () {
@@ -237,7 +245,7 @@ describe('Url', function () {
             var testContext = 'nav',
                 testData;
 
-            configUtils.set({url: 'http://my-ghost-blog.com', urlSSL: 'https://my-ghost-blog.com'});
+            configUtils.set({url: 'http://my-ghost-blog.com'});
 
             testData = {nav: {url: 'http://my-ghost-blog.com/short-and-sweet/'}};
             utils.url.urlFor(testContext, testData).should.equal('http://my-ghost-blog.com/short-and-sweet/');
@@ -278,20 +286,163 @@ describe('Url', function () {
             utils.url.urlFor(testContext, testData).should.equal('mailto:marshmallow@my-ghost-blog.com');
         });
 
-        it('should return other known paths when requested', function () {
+        it('sitemap: should return other known paths when requested', function () {
             configUtils.set({url: 'http://my-ghost-blog.com'});
             utils.url.urlFor('sitemap_xsl').should.equal('/sitemap.xsl');
             utils.url.urlFor('sitemap_xsl', true).should.equal('http://my-ghost-blog.com/sitemap.xsl');
+        });
 
-            utils.url.urlFor('api').should.equal('/ghost/api/v0.1');
-            utils.url.urlFor('api', true).should.equal('http://my-ghost-blog.com/ghost/api/v0.1');
+        it('admin: relative', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com'
+            });
+
+            utils.url.urlFor('admin').should.equal('/ghost/');
+        });
+
+        it('admin: url is http', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com'
+            });
+
+            utils.url.urlFor('admin', true).should.equal('http://my-ghost-blog.com/ghost/');
+        });
+
+        it('admin: custom admin url is set', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com',
+                admin: {
+                    url: 'https://admin.my-ghost-blog.com'
+                }
+            });
+
+            utils.url.urlFor('admin', true).should.equal('https://admin.my-ghost-blog.com/ghost/');
+        });
+
+        it('admin: blog is on subdir', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com/blog'
+            });
+
+            utils.url.urlFor('admin', true).should.equal('http://my-ghost-blog.com/blog/ghost/');
+        });
+
+        it('admin: blog is on subdir', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com/blog/'
+            });
+
+            utils.url.urlFor('admin', true).should.equal('http://my-ghost-blog.com/blog/ghost/');
+        });
+
+        it('admin: blog is on subdir', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com/blog'
+            });
+
+            utils.url.urlFor('admin').should.equal('/blog/ghost/');
+        });
+
+        it('admin: blog is on subdir', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com/blog',
+                admin: {
+                    url: 'http://something.com'
+                }
+            });
+
+            utils.url.urlFor('admin', true).should.equal('http://something.com/blog/ghost/');
+        });
+
+        it('admin: blog is on subdir', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com/blog',
+                admin: {
+                    url: 'http://something.com/blog'
+                }
+            });
+
+            utils.url.urlFor('admin', true).should.equal('http://something.com/blog/ghost/');
+        });
+
+        it('admin: blog is on subdir', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com/blog',
+                admin: {
+                    url: 'http://something.com/blog/'
+                }
+            });
+
+            utils.url.urlFor('admin', true).should.equal('http://something.com/blog/ghost/');
+        });
+
+        it('admin: blog is on subdir', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com/blog/',
+                admin: {
+                    url: 'http://something.com/blog'
+                }
+            });
+
+            utils.url.urlFor('admin', true).should.equal('http://something.com/blog/ghost/');
+        });
+
+        it('api: should return admin url is set', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com',
+                admin: {
+                    url: 'https://something.de'
+                }
+            });
+
+            utils.url.urlFor('api', true).should.eql('https://something.de/ghost/api/v0.1/');
+        });
+
+        it('api: url has subdir', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com/blog'
+            });
+
+            utils.url.urlFor('api', true).should.eql('http://my-ghost-blog.com/blog/ghost/api/v0.1/');
+        });
+
+        it('api: should return http if config.url is http', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com'
+            });
+
+            utils.url.urlFor('api', true).should.eql('http://my-ghost-blog.com/ghost/api/v0.1/');
+        });
+
+        it('api: should return https if config.url is https', function () {
+            configUtils.set({
+                url: 'https://my-ghost-blog.com'
+            });
+
+            utils.url.urlFor('api', true).should.eql('https://my-ghost-blog.com/ghost/api/v0.1/');
+        });
+
+        it('api: cors should return no protocol', function () {
+            configUtils.set({
+                url: 'http://my-ghost-blog.com'
+            });
+
+            utils.url.urlFor('api', {cors: true}, true).should.eql('//my-ghost-blog.com/ghost/api/v0.1/');
         });
     });
 
     describe('urlPathForPost', function () {
-        it('permalink is /:slug/, timezone is default', function () {
-            configUtils.set('theme:permalinks', '/:slug/');
+        var localSettingsCache = {
+            permalinks: '/:slug/'
+        };
 
+        beforeEach(function () {
+            sandbox.stub(settingsCache, 'get', function (key) {
+                return localSettingsCache[key];
+            });
+        });
+
+        it('permalink is /:slug/, timezone is default', function () {
             var testData = testUtils.DataGenerator.Content.posts[2],
                 postLink = '/short-and-sweet/';
 
@@ -299,8 +450,8 @@ describe('Url', function () {
         });
 
         it('permalink is /:year/:month/:day/:slug, blog timezone is Los Angeles', function () {
-            configUtils.set('theme:timezone', 'America/Los_Angeles');
-            configUtils.set('theme:permalinks', '/:year/:month/:day/:slug/');
+            localSettingsCache.activeTimezone = 'America/Los_Angeles';
+            localSettingsCache.permalinks = '/:year/:month/:day/:slug/';
 
             var testData = testUtils.DataGenerator.Content.posts[2],
                 postLink = '/2016/05/17/short-and-sweet/';
@@ -310,8 +461,8 @@ describe('Url', function () {
         });
 
         it('permalink is /:year/:month/:day/:slug, blog timezone is Asia Tokyo', function () {
-            configUtils.set('theme:timezone', 'Asia/Tokyo');
-            configUtils.set('theme:permalinks', '/:year/:month/:day/:slug/');
+            localSettingsCache.activeTimezone = 'Asia/Tokyo';
+            localSettingsCache.permalinks = '/:year/:month/:day/:slug/';
 
             var testData = testUtils.DataGenerator.Content.posts[2],
                 postLink = '/2016/05/18/short-and-sweet/';
@@ -321,8 +472,8 @@ describe('Url', function () {
         });
 
         it('post is page, no permalink usage allowed at all', function () {
-            configUtils.set('theme:timezone', 'America/Los_Angeles');
-            configUtils.set('theme:permalinks', '/:year/:month/:day/:slug/');
+            localSettingsCache.activeTimezone = 'America/Los_Angeles';
+            localSettingsCache.permalinks = '/:year/:month/:day/:slug/';
 
             var testData = testUtils.DataGenerator.Content.posts[5],
                 postLink = '/static-page-test/';
@@ -331,8 +482,8 @@ describe('Url', function () {
         });
 
         it('permalink is /:year/:id:/:author', function () {
-            configUtils.set('theme:timezone', 'America/Los_Angeles');
-            configUtils.set('theme:permalinks', '/:year/:id/:author/');
+            localSettingsCache.activeTimezone = 'America/Los_Angeles';
+            localSettingsCache.permalinks = '/:year/:id/:author/';
 
             var testData = _.merge(testUtils.DataGenerator.Content.posts[2], {id: 3}, {author: {slug: 'joe-blog'}}),
                 postLink = '/2015/3/joe-blog/';
@@ -342,8 +493,8 @@ describe('Url', function () {
         });
 
         it('permalink is /:year/:id:/:author', function () {
-            configUtils.set('theme:timezone', 'Europe/Berlin');
-            configUtils.set('theme:permalinks', '/:year/:id/:author/');
+            localSettingsCache.activeTimezone = 'Europe/Berlin';
+            localSettingsCache.permalinks = '/:year/:id/:author/';
 
             var testData = _.merge(testUtils.DataGenerator.Content.posts[2], {id: 3}, {author: {slug: 'joe-blog'}}),
                 postLink = '/2016/3/joe-blog/';
@@ -353,7 +504,7 @@ describe('Url', function () {
         });
 
         it('post is not published yet', function () {
-            configUtils.set('theme:permalinks', '/:year/:month/:day/:slug/');
+            localSettingsCache.permalinks = '/:year/:month/:day/:slug/';
 
             var testData = _.merge(testUtils.DataGenerator.Content.posts[2], {id: 3, published_at: null}),
                 nowMoment = moment(),
@@ -364,79 +515,6 @@ describe('Url', function () {
             postLink = postLink.replace('DD', nowMoment.format('DD'));
 
             utils.url.urlPathForPost(testData).should.equal(postLink);
-        });
-    });
-
-    describe('apiUrl', function () {
-        it('should return https config.url if forceAdminSSL set', function () {
-            configUtils.set({
-                url: 'http://my-ghost-blog.com',
-                forceAdminSSL: true
-            });
-
-            utils.url.apiUrl().should.eql('https://my-ghost-blog.com/ghost/api/v0.1/');
-        });
-
-        it('should return https config.urlSSL if forceAdminSSL set and urlSSL is misconfigured', function () {
-            configUtils.set({
-                url: 'http://my-ghost-blog.com',
-                urlSSL: 'http://other-ghost-blog.com',
-                forceAdminSSL: true
-            });
-
-            utils.url.apiUrl().should.eql('https://other-ghost-blog.com/ghost/api/v0.1/');
-        });
-
-        it('should return https config.urlSSL if forceAdminSSL set', function () {
-            configUtils.set({
-                url: 'http://my-ghost-blog.com',
-                urlSSL: 'https://other-ghost-blog.com',
-                forceAdminSSL: true
-            });
-
-            utils.url.apiUrl().should.eql('https://other-ghost-blog.com/ghost/api/v0.1/');
-        });
-
-        it('should return https config.urlSSL if set and misconfigured & forceAdminSSL is NOT set', function () {
-            configUtils.set({
-                url: 'http://my-ghost-blog.com',
-                urlSSL: 'http://other-ghost-blog.com'
-            });
-
-            utils.url.apiUrl().should.eql('https://other-ghost-blog.com/ghost/api/v0.1/');
-        });
-
-        it('should return https config.urlSSL if set & forceAdminSSL is NOT set', function () {
-            configUtils.set({
-                url: 'http://my-ghost-blog.com',
-                urlSSL: 'https://other-ghost-blog.com'
-            });
-
-            utils.url.apiUrl().should.eql('https://other-ghost-blog.com/ghost/api/v0.1/');
-        });
-
-        it('should return https config.url if config.url is https & forceAdminSSL is NOT set', function () {
-            configUtils.set({
-                url: 'https://my-ghost-blog.com'
-            });
-
-            utils.url.apiUrl().should.eql('https://my-ghost-blog.com/ghost/api/v0.1/');
-        });
-
-        it('CORS: should return no protocol config.url if config.url is NOT https & forceAdminSSL/urlSSL is NOT set', function () {
-            configUtils.set({
-                url: 'http://my-ghost-blog.com'
-            });
-
-            utils.url.apiUrl({cors: true}).should.eql('//my-ghost-blog.com/ghost/api/v0.1/');
-        });
-
-        it('should return protocol config.url if config.url is NOT https & forceAdminSSL/urlSSL is NOT set', function () {
-            configUtils.set({
-                url: 'http://my-ghost-blog.com'
-            });
-
-            utils.url.apiUrl().should.eql('http://my-ghost-blog.com/ghost/api/v0.1/');
         });
     });
 });

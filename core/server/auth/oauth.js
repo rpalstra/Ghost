@@ -1,9 +1,8 @@
 var oauth2orize = require('oauth2orize'),
     passport = require('passport'),
     models = require('../models'),
-    utils = require('../utils'),
     errors = require('../errors'),
-    authenticationAPI = require('../api/authentication'),
+    authUtils = require('./utils'),
     spamPrevention = require('../middleware/api/spam-prevention'),
     i18n = require('../i18n'),
     oauthServer,
@@ -15,22 +14,18 @@ function exchangeRefreshToken(client, refreshToken, scope, body, authInfo, done)
             if (!model) {
                 return done(new errors.NoPermissionError({message: i18n.t('errors.middleware.oauth.invalidRefreshToken')}), false);
             } else {
-                var token = model.toJSON(),
-                    accessToken = utils.uid(191),
-                    accessExpires = Date.now() + utils.ONE_HOUR_MS,
-                    refreshExpires = Date.now() + utils.ONE_WEEK_MS;
+                var token = model.toJSON();
 
                 if (token.expires > Date.now()) {
-                    spamPrevention.userLogin.reset(null, authInfo.ip + body.refresh_token + 'login');
-                    models.Accesstoken.add({
-                        token: accessToken,
-                        user_id: token.user_id,
-                        client_id: token.client_id,
-                        expires: accessExpires
-                    }).then(function then() {
-                        return models.Refreshtoken.edit({expires: refreshExpires}, {id: token.id});
-                    }).then(function then() {
-                        return done(null, accessToken, {expires_in: utils.ONE_HOUR_S});
+                    spamPrevention.userLogin.reset(authInfo.ip, body.refresh_token + 'login');
+
+                    authUtils.createTokens({
+                        clientId: token.client_id,
+                        userId: token.user_id,
+                        oldAccessToken: authInfo.accessToken,
+                        oldRefreshToken: refreshToken
+                    }).then(function (response) {
+                        return done(null, response.access_token, {expires_in: response.expires_in});
                     }).catch(function handleError(error) {
                         return done(error, false);
                     });
@@ -42,21 +37,24 @@ function exchangeRefreshToken(client, refreshToken, scope, body, authInfo, done)
 }
 // We are required to pass in authInfo in order to reset spam counter for user login
 function exchangePassword(client, username, password, scope, body, authInfo, done) {
-    // Validate the client
     models.Client.findOne({slug: client.slug})
         .then(function then(client) {
             if (!client) {
-                return done(new errors.NoPermissionError({message: i18n.t('errors.middleware.oauth.invalidClient')}), false);
+                return done(new errors.NoPermissionError({
+                    message: i18n.t('errors.middleware.oauth.invalidClient')
+                }), false);
             }
 
             // Validate the user
             return models.User.check({email: username, password: password})
                 .then(function then(user) {
-                    return authenticationAPI.createTokens({}, {context: {client_id: client.id, user: user.id}});
+                    return authUtils.createTokens({
+                        clientId: client.id,
+                        userId: user.id
+                    });
                 })
                 .then(function then(response) {
-                    // Reset spam count for username and IP pair
-                    spamPrevention.userLogin.reset(null, authInfo.ip + username + 'login');
+                    spamPrevention.userLogin.reset(authInfo.ip, username + 'login');
                     return done(null, response.access_token, response.refresh_token, {expires_in: response.expires_in});
                 });
         })
@@ -71,6 +69,7 @@ function exchangeAuthorizationCode(req, res, next) {
             message: i18n.t('errors.middleware.auth.accessDenied')
         }));
     }
+
     req.query.code = req.body.authorizationCode;
 
     passport.authenticate('ghost', {session: false, failWithError: false}, function authenticate(err, user) {
@@ -86,19 +85,20 @@ function exchangeAuthorizationCode(req, res, next) {
             }));
         }
 
-        spamPrevention.userLogin.reset(null, req.authInfo.ip + req.body.authorizationCode + 'login');
+        spamPrevention.userLogin.reset(req.authInfo.ip, req.body.authorizationCode + 'login');
 
-        authenticationAPI.createTokens({}, {context: {client_id: req.client.id, user: user.id}})
-            .then(function then(response) {
-                res.json({
-                    access_token: response.access_token,
-                    refresh_token: response.refresh_token,
-                    expires_in: response.expires_in
-                });
-            })
-            .catch(function (err) {
-                next(err);
+        authUtils.createTokens({
+            clientId: req.client.id,
+            userId: user.id
+        }).then(function then(response) {
+            res.json({
+                access_token: response.access_token,
+                refresh_token: response.refresh_token,
+                expires_in: response.expires_in
             });
+        }).catch(function (err) {
+            next(err);
+        });
     })(req, res, next);
 }
 
@@ -147,6 +147,18 @@ oauth = {
     // ### Generate access token Middleware
     // register the oauth2orize middleware for password and refresh token grants
     generateAccessToken: function generateAccessToken(req, res, next) {
+        /**
+         * TODO:
+         * https://github.com/jaredhanson/oauth2orize/issues/182
+         * oauth2orize only offers the option to forward request information via authInfo object
+         *
+         * Important: only used for resetting the brute count (access to req.ip)
+         */
+        req.authInfo = {
+            ip: req.ip,
+            accessToken: authUtils.getBearerAutorizationToken(req)
+        };
+
         return oauthServer.token()(req, res, next);
     }
 };

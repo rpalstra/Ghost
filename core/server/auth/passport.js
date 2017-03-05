@@ -69,6 +69,7 @@ _private.updateClient = function updateClient(options) {
                     description: clientDescription
                 }).then(function registeredRemoteClient(credentials) {
                     debug('Registered remote client: ' + JSON.stringify(credentials));
+                    logging.info('Registered remote client successfully.');
 
                     return models.Client.add({
                         name: credentials.name,
@@ -77,7 +78,8 @@ _private.updateClient = function updateClient(options) {
                         uuid: credentials.client_id,
                         secret: credentials.client_secret,
                         redirection_uri: credentials.redirect_uri,
-                        client_uri: credentials.blog_uri
+                        client_uri: credentials.blog_uri,
+                        auth_uri: ghostOAuth2Strategy.url
                     }, {context: {internal: true}});
                 }).then(function addedLocalClient(client) {
                     debug('Added local client: ' + JSON.stringify(client.toJSON()));
@@ -87,6 +89,14 @@ _private.updateClient = function updateClient(options) {
                         client_secret: client.get('secret')
                     };
                 });
+            }
+
+            // CASE: auth url has changed, create client
+            if (client.get('auth_uri') !== ghostOAuth2Strategy.url) {
+                return models.Client.destroy({id: client.id})
+                    .then(function () {
+                        return _private.updateClient(options);
+                    });
             }
 
             // CASE: nothing changed
@@ -113,6 +123,7 @@ _private.updateClient = function updateClient(options) {
             }, _.isUndefined)).then(function updatedRemoteClient(updatedRemoteClient) {
                 debug('Update remote client: ' + JSON.stringify(updatedRemoteClient));
 
+                client.set('auth_uri', ghostOAuth2Strategy.url);
                 client.set('redirection_uri', updatedRemoteClient.redirect_uri);
                 client.set('client_uri', updatedRemoteClient.blog_uri);
                 client.set('name', updatedRemoteClient.name);
@@ -120,6 +131,8 @@ _private.updateClient = function updateClient(options) {
 
                 return client.save(null, {context: {internal: true}});
             }).then(function updatedLocalClient() {
+                logging.info('Updated remote client successfully.');
+
                 return {
                     client_id: client.get('uuid'),
                     client_secret: client.get('secret')
@@ -145,15 +158,31 @@ exports.init = function initPassport(options) {
         passport.use(new ClientPasswordStrategy(authStrategies.clientPasswordStrategy));
         passport.use(new BearerStrategy(authStrategies.bearerStrategy));
 
+        // CASE: use switches from password to ghost and back
+        // If we don't clean up the database, it can happen that the auth switch validation fails
         if (authType !== 'ghost') {
-            return resolve({passport: passport.initialize()});
+            return models.Client.findOne({slug: 'ghost-auth'})
+                .then(function (client) {
+                    if (!client) {
+                        return;
+                    }
+
+                    return models.Client.destroy({id: client.id});
+                })
+                .then(function () {
+                    resolve({passport: passport.initialize()});
+                })
+                .catch(reject);
         }
 
         var ghostOAuth2Strategy = new GhostOAuth2Strategy({
             redirectUri: redirectUri,
             blogUri: clientUri,
             url: ghostAuthUrl,
-            passReqToCallback: true
+            passReqToCallback: true,
+            retryHook: function retryHook(err) {
+                logging.error(err);
+            }
         }, authStrategies.ghostStrategy);
 
         _private.updateClient({
@@ -168,18 +197,25 @@ exports.init = function initPassport(options) {
             _private.registerEvents();
             return resolve({passport: passport.initialize()});
         }).catch(function onError(err) {
+            debug('Public registration failed:' + err.message);
+
             // @TODO: see https://github.com/TryGhost/Ghost/issues/7627
+            // CASE: can happen if database query fails
             if (_.isArray(err)) {
                 err = err[0];
             }
 
-            debug('Public registration failed:' + err.message);
+            if (!errors.utils.isIgnitionError(err)) {
+                err = new errors.GhostError({
+                    err: err
+                });
+            }
 
-            return reject(new errors.GhostError({
-                err: err,
-                context: 'Public client registration failed',
-                help: 'Please verify the configured url: ' + ghostOAuth2Strategy.url
-            }));
+            err.level = 'critical';
+            err.context = err.context || 'Public client registration failed';
+            err.help = err.help || 'Please verify the configured url: ' + ghostOAuth2Strategy.url;
+
+            return reject(err);
         });
     });
 };

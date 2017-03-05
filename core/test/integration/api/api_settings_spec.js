@@ -4,6 +4,7 @@ var testUtils           = require('../../utils'),
 
     // Stuff we are testing
     SettingsAPI         = require('../../../server/api/settings'),
+    settingsCache       = require('../../../server/settings/cache'),
     defaultContext      = {user: 1},
     internalContext     = {internal: true},
     callApiWithContext,
@@ -88,8 +89,8 @@ describe('Settings API', function () {
     });
 
     it('cannot read core settings if not an internal request', function () {
-        return callApiWithContext(defaultContext, 'read',  {key: 'databaseVersion'}).then(function () {
-            throw new Error('Allowed to read databaseVersion with external request');
+        return callApiWithContext(defaultContext, 'read',  {key: 'dbHash'}).then(function () {
+            throw new Error('Allowed to read dbHash with external request');
         }).catch(function (error) {
             should.exist(error);
             error.errorType.should.eql('NoPermissionError');
@@ -97,7 +98,7 @@ describe('Settings API', function () {
     });
 
     it('can read core settings if an internal request', function () {
-        return callApiWithContext(internalContext, 'read', {key: 'databaseVersion'}).then(function (response) {
+        return callApiWithContext(internalContext, 'read', {key: 'dbHash'}).then(function (response) {
             should.exist(response);
             testUtils.API.checkResponse(response, 'settings');
             response.settings.length.should.equal(1);
@@ -115,11 +116,8 @@ describe('Settings API', function () {
     });
 
     it('can edit', function () {
-        var testReference = SettingsAPI.getSettingsSync();
-
         // see default-settings.json
-        SettingsAPI.getSettingSync('title').should.eql('Ghost');
-        testReference.title.value.should.eql('Ghost');
+        settingsCache.get('title').should.eql('Ghost');
 
         return callApiWithContext(defaultContext, 'edit', {settings: [{key: 'title', value: 'UpdatedGhost'}]}, {})
             .then(function (response) {
@@ -128,13 +126,12 @@ describe('Settings API', function () {
                 response.settings.length.should.equal(1);
                 testUtils.API.checkResponse(response.settings[0], 'setting');
 
-                SettingsAPI.getSettingSync('title').should.eql('UpdatedGhost');
-                testReference.title.value.should.eql('UpdatedGhost');
+                settingsCache.get('title').should.eql('UpdatedGhost');
             });
     });
 
     it('cannot edit a core setting if not an internal request', function () {
-        return callApiWithContext(defaultContext, 'edit', {settings: [{key: 'databaseVersion', value: '999'}]}, {})
+        return callApiWithContext(defaultContext, 'edit', {settings: [{key: 'dbHash', value: 'hash'}]}, {})
             .then(function () {
                 throw new Error('Allowed to edit a core setting as external request');
             }).catch(function (err) {
@@ -145,7 +142,7 @@ describe('Settings API', function () {
     });
 
     it('can edit a core setting with an internal request', function () {
-        return callApiWithContext(internalContext, 'edit', {settings: [{key: 'databaseVersion', value: '999'}]}, {})
+        return callApiWithContext(internalContext, 'edit', {settings: [{key: 'dbHash', value: 'hash'}]}, {})
             .then(function (response) {
                 should.exist(response);
                 testUtils.API.checkResponse(response, 'settings');
@@ -164,18 +161,6 @@ describe('Settings API', function () {
         });
     });
 
-    it('does not allow an active theme which is not installed', function () {
-        return callApiWithContext(defaultContext, 'edit', 'activeTheme', {
-            settings: [{key: 'activeTheme', value: 'rasper'}]
-        }).then(function () {
-            throw new Error('Allowed to set an active theme which is not installed');
-        }).catch(function (err) {
-            should.exist(err);
-
-            err.errorType.should.eql('ValidationError');
-        });
-    });
-
     it('set activeTimezone: unknown timezone', function () {
         return callApiWithContext(defaultContext, 'edit', {settings: [{key: 'activeTimezone', value: 'MFG'}]}, {})
             .then(function () {
@@ -189,5 +174,21 @@ describe('Settings API', function () {
 
     it('set activeTimezone: known timezone', function () {
         return callApiWithContext(defaultContext, 'edit', {settings: [{key: 'activeTimezone', value: 'Etc/UTC'}]}, {});
+    });
+
+    describe('Themes (to be removed from settings)', function () {
+        beforeEach(testUtils.setup('themes'));
+
+        it('does not allow an active theme which is not installed', function () {
+            return callApiWithContext(defaultContext, 'edit', 'activeTheme', {
+                settings: [{key: 'activeTheme', value: 'rasper'}]
+            }).then(function () {
+                throw new Error('Allowed to set an active theme which is not installed');
+            }).catch(function (err) {
+                should.exist(err);
+
+                err.errorType.should.eql('ValidationError');
+            });
+        });
     });
 });

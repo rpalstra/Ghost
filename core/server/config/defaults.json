@@ -1,17 +1,8 @@
 {
     "url": "http://localhost:2368",
-    "urlSSL": false,
-    "forceAdminSSL": false,
     "server": {
         "host": "127.0.0.1",
         "port": 2368
-    },
-    "database": {
-        "client": "sqlite3",
-        "debug": false,
-        "connection": {
-            "filename": "content/data/ghost.db"
-        }
     },
     "privacy": false,
     "paths": {
@@ -24,10 +15,6 @@
     },
     "scheduling": {
         "active": "SchedulingDefault"
-    },
-    "auth": {
-        "type": "ghost",
-        "url": "http://devauth.ghost.org:8080"
     },
     "logging": {
         "level": "info",

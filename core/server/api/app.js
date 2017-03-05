@@ -21,7 +21,7 @@ var debug = require('debug')('ghost:api'),
     // Shared
     bodyParser = require('body-parser'), // global, shared
     cacheControl = require('../middleware/cache-control'), // global, shared
-    checkSSL = require('../middleware/check-ssl'),
+    urlRedirects = require('../middleware/url-redirects'),
     prettyURLs = require('../middleware/pretty-urls'),
     maintenance = require('../middleware/maintenance'), // global, shared
     errorHandler = require('../middleware/error-handler'), // global, shared
@@ -30,22 +30,28 @@ var debug = require('debug')('ghost:api'),
     // @TODO find a more appy way to do this!
     labs = require('../middleware/labs'),
 
-    // @TODO find a better way to bundle these authentication packages
-    // Authentication for public endpoints
+    /**
+     * Authentication for public endpoints
+     * @TODO find a better way to bundle these authentication packages
+     *
+     * IMPORTANT
+     * - cors middleware MUST happen before pretty urls, because otherwise cors header can get lost
+     * - cors middleware MUST happen after authenticateClient, because authenticateClient reads the trusted domains
+     */
     authenticatePublic = [
         auth.authenticate.authenticateClient,
         auth.authenticate.authenticateUser,
         auth.authorize.requiresAuthorizedUserPublicAPI,
-        // @TODO do we really need this multiple times or should it be global?
-        cors
+        cors,
+        prettyURLs
     ],
     // Require user for private endpoints
     authenticatePrivate = [
         auth.authenticate.authenticateClient,
         auth.authenticate.authenticateUser,
         auth.authorize.requiresAuthorizedUser,
-        // @TODO do we really need this multiple times or should it be global?
-        cors
+        cors,
+        prettyURLs
     ];
 
 // @TODO refactor/clean this up - how do we want the routing to work long term?
@@ -129,6 +135,8 @@ function apiRoutes() {
     apiRouter.get('/slugs/:type/:name', authenticatePrivate, api.http(api.slugs.generate));
 
     // ## Themes
+    apiRouter.get('/themes/', authenticatePrivate, api.http(api.themes.browse));
+
     apiRouter.get('/themes/:name/download',
         authenticatePrivate,
         api.http(api.themes.download)
@@ -170,9 +178,7 @@ function apiRoutes() {
 
     // ## Authentication
     apiRouter.post('/authentication/passwordreset',
-        // Prevent more than 5 password resets from an ip in an hour for any email address
         brute.globalReset,
-        // Prevent more than 5 password resets in an hour for an email+IP pair
         brute.userReset,
         api.http(api.authentication.generateResetToken)
     );
@@ -200,6 +206,14 @@ function apiRoutes() {
         api.http(api.uploads.add)
     );
 
+    apiRouter.post('/uploads/icon',
+        authenticatePrivate,
+        upload.single('uploadimage'),
+        validation.upload({type: 'icons'}),
+        validation.blogIcon(),
+        api.http(api.uploads.add)
+    );
+
     // ## Invites
     apiRouter.get('/invites', authenticatePrivate, api.http(api.invites.browse));
     apiRouter.get('/invites/:id', authenticatePrivate, api.http(api.invites.read));
@@ -215,7 +229,7 @@ module.exports = function setupApiApp() {
 
     // @TODO finish refactoring this away.
     apiApp.use(function setIsAdmin(req, res, next) {
-        // Api === isAdmin for the purposes of the forceAdminSSL config option.
+        // api === isAdmin
         res.isAdmin = true;
         next();
     });
@@ -231,11 +245,7 @@ module.exports = function setupApiApp() {
 
     // Force SSL if required
     // must happen AFTER asset loading and BEFORE routing
-    apiApp.use(checkSSL);
-
-    // Add in all trailing slashes & remove uppercase
-    // must happen AFTER asset loading and BEFORE routing
-    apiApp.use(prettyURLs);
+    apiApp.use(urlRedirects);
 
     // Check version matches for API requests, depends on res.locals.safeVersion being set
     // Therefore must come after themeHandler.ghostLocals, for now

@@ -22,11 +22,14 @@ describe('Themes API', function () {
                 .attach(fieldName, themePath);
         },
         editor: null
-    };
+    }, ghostServer;
 
     before(function (done) {
-        ghost().then(function (ghostServer) {
-            request = supertest.agent(ghostServer.rootApp);
+        ghost().then(function (_ghostServer) {
+            ghostServer = _ghostServer;
+            return ghostServer.start();
+        }).then(function () {
+            request = supertest.agent(config.get('url'));
         }).then(function () {
             return testUtils.doAuth(request);
         }).then(function (token) {
@@ -47,7 +50,7 @@ describe('Themes API', function () {
         }).catch(done);
     });
 
-    after(function (done) {
+    after(function () {
         // clean successful uploaded themes
         fs.removeSync(config.getContentPath('themes') + '/valid');
         fs.removeSync(config.getContentPath('themes') + '/casper.zip');
@@ -55,24 +58,25 @@ describe('Themes API', function () {
         // gscan creates /test/tmp in test mode
         fs.removeSync(config.get('paths').appRoot + '/test');
 
-        testUtils.clearData()
+        return testUtils.clearData()
             .then(function () {
-                done();
-            }).catch(done);
+                return ghostServer.stop();
+            });
     });
 
     describe('success cases', function () {
-        it('get all available themes', function (done) {
-            request.get(testUtils.API.getApiQuery('settings/'))
+        it('get all themes', function (done) {
+            request.get(testUtils.API.getApiQuery('themes/'))
                 .set('Authorization', 'Bearer ' + scope.ownerAccessToken)
                 .end(function (err, res) {
                     if (err) {
                         return done(err);
                     }
 
-                    var availableThemes = _.find(res.body.settings, {key: 'availableThemes'});
-                    should.exist(availableThemes);
-                    availableThemes.value.length.should.be.above(0);
+                    var jsonResponse = res.body;
+                    should.exist(jsonResponse.themes);
+                    testUtils.API.checkResponse(jsonResponse, 'themes');
+                    jsonResponse.themes.length.should.be.above(0);
                     done();
                 });
         });
@@ -105,19 +109,21 @@ describe('Themes API', function () {
                 });
         });
 
-        it('get all available themes', function (done) {
-            request.get(testUtils.API.getApiQuery('settings/'))
+        it('get all themes + new theme', function (done) {
+            request.get(testUtils.API.getApiQuery('themes/'))
                 .set('Authorization', 'Bearer ' + scope.ownerAccessToken)
                 .end(function (err, res) {
                     if (err) {
                         return done(err);
                     }
 
-                    var availableThemes = _.find(res.body.settings, {key: 'availableThemes'});
-                    should.exist(availableThemes);
+                    var jsonResponse = res.body;
+                    should.exist(jsonResponse.themes);
+                    testUtils.API.checkResponse(jsonResponse, 'themes');
+                    jsonResponse.themes.length.should.be.above(0);
 
                     // ensure the new 'valid' theme is available
-                    should.exist(_.find(availableThemes.value, {name: 'valid'}));
+                    should.exist(_.find(jsonResponse.themes, {name: 'valid'}));
                     done();
                 });
         });

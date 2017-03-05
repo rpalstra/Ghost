@@ -69,13 +69,18 @@ strategies = {
      * - via invite token
      * - via normal auth
      * - via setup
-     *
-     * @TODO: validate GhostAuth profile?
      */
     ghostStrategy: function ghostStrategy(req, ghostAuthAccessToken, ghostAuthRefreshToken, profile, done) {
         var inviteToken = req.body.inviteToken,
             options = {context: {internal: true}},
             handleInviteToken, handleSetup;
+
+        // CASE: socket hangs up for example
+        if (!ghostAuthAccessToken || !profile) {
+            return done(new errors.NoPermissionError({
+                help: 'Please try again.'
+            }));
+        }
 
         handleInviteToken = function handleInviteToken() {
             var user, invite;
@@ -110,7 +115,7 @@ strategies = {
         };
 
         handleSetup = function handleSetup() {
-            return models.User.findOne({slug: 'ghost-owner', status: 'all'}, options)
+            return models.User.findOne({slug: 'ghost-owner', status: 'inactive'}, options)
                 .then(function fetchedOwner(owner) {
                     if (!owner) {
                         throw new errors.NotFoundError({message: i18n.t('errors.models.user.userNotFound')});

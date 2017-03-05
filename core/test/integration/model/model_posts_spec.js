@@ -4,41 +4,30 @@ var testUtils       = require('../../utils'),
     _               = require('lodash'),
     Promise         = require('bluebird'),
     sinon           = require('sinon'),
-
-    // Stuff we are testing
     sequence        = require('../../../server/utils/sequence'),
+    settingsCache   = require('../../../server/settings/cache'),
     ghostBookshelf  = require('../../../server/models/base'),
     PostModel       = require('../../../server/models/post').Post,
     TagModel        = require('../../../server/models/tag').Tag,
-    models          = require('../../../server/models'),
     events          = require('../../../server/events'),
     errors          = require('../../../server/errors'),
+    configUtils     = require('../../utils/configUtils'),
     DataGenerator   = testUtils.DataGenerator,
     context         = testUtils.context.owner,
-    configUtils = require('../../utils/configUtils'),
     sandbox         = sinon.sandbox.create();
 
+/**
+ * IMPORTANT:
+ * - do not spy the events unit, because when we only spy, all listeners get the event
+ * - this can cause unexpected behaviour as the listeners execute code
+ * - using rewire is not possible, because each model self registers it's model registry in bookshelf
+ * - rewire would add 1 registry, a file who requires the models, tries to register the model another time
+ */
 describe('Post Model', function () {
-    var eventSpy;
+    var eventsTriggered = {};
 
-    // Keep the DB clean
     before(testUtils.teardown);
     afterEach(testUtils.teardown);
-
-    beforeEach(function () {
-        eventSpy = sandbox.spy(events, 'emit');
-
-        /**
-         * @TODO:
-         * - key: migrations-kate
-         * - this is not pretty
-         * - eventSpy get's now more events then expected
-         * - because on migrations.populate we trigger populateDefaults
-         * - how to solve? eventSpy must be local and not global?
-         */
-        models.init();
-        sandbox.stub(models.Settings, 'populateDefaults').returns(Promise.resolve());
-    });
 
     afterEach(function () {
         sandbox.restore();
@@ -74,7 +63,11 @@ describe('Post Model', function () {
 
         describe('findAll', function () {
             beforeEach(function () {
-                configUtils.set('theme:permalinks', '/:slug/');
+                sandbox.stub(settingsCache, 'get', function (key) {
+                    return {
+                        permalinks: '/:slug/'
+                    }[key];
+                });
             });
 
             it('can findAll', function (done) {
@@ -104,9 +97,11 @@ describe('Post Model', function () {
 
         describe('findPage', function () {
             beforeEach(function () {
-                configUtils.set({theme: {
-                    permalinks: '/:slug/'
-                }});
+                sandbox.stub(settingsCache, 'get', function (key) {
+                    return {
+                        permalinks: '/:slug/'
+                    }[key];
+                });
             });
 
             it('can findPage (default)', function (done) {
@@ -291,7 +286,11 @@ describe('Post Model', function () {
 
         describe('findOne', function () {
             beforeEach(function () {
-                configUtils.set('theme:permalinks', '/:slug/');
+                sandbox.stub(settingsCache, 'get', function (key) {
+                    return {
+                        permalinks: '/:slug/'
+                    }[key];
+                });
             });
 
             it('can findOne', function (done) {
@@ -338,7 +337,13 @@ describe('Post Model', function () {
             });
 
             it('can findOne, returning a dated permalink', function (done) {
-                configUtils.set('theme:permalinks', '/:year/:month/:day/:slug/');
+                settingsCache.get.restore();
+
+                sandbox.stub(settingsCache, 'get', function (key) {
+                    return {
+                        permalinks: '/:year/:month/:day/:slug/'
+                    }[key];
+                });
 
                 PostModel.findOne({id: testUtils.DataGenerator.Content.posts[0].id})
                     .then(function (result) {
@@ -355,6 +360,18 @@ describe('Post Model', function () {
         });
 
         describe('edit', function () {
+            beforeEach(function () {
+                eventsTriggered = {};
+
+                sandbox.stub(events, 'emit', function (eventName, eventObj) {
+                    if (!eventsTriggered[eventName]) {
+                        eventsTriggered[eventName] = [];
+                    }
+
+                    eventsTriggered[eventName].push(eventObj);
+                });
+            });
+
             it('can change title', function (done) {
                 var postId = testUtils.DataGenerator.Content.posts[0].id;
 
@@ -369,9 +386,10 @@ describe('Post Model', function () {
                 }).then(function (edited) {
                     should.exist(edited);
                     edited.attributes.title.should.equal('new title');
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('post.published.edited').should.be.true();
-                    eventSpy.secondCall.calledWith('post.edited').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.published.edited']);
+                    should.exist(eventsTriggered['post.edited']);
 
                     done();
                 }).catch(done);
@@ -421,9 +439,10 @@ describe('Post Model', function () {
                 }).then(function (edited) {
                     should.exist(edited);
                     edited.attributes.status.should.equal('published');
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('post.published').should.be.true();
-                    eventSpy.secondCall.calledWith('post.edited').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.published']);
+                    should.exist(eventsTriggered['post.edited']);
 
                     done();
                 }).catch(done);
@@ -443,9 +462,10 @@ describe('Post Model', function () {
                 }).then(function (edited) {
                     should.exist(edited);
                     edited.attributes.status.should.equal('draft');
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('post.unpublished').should.be.true();
-                    eventSpy.secondCall.calledWith('post.edited').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.unpublished']);
+                    should.exist(eventsTriggered['post.edited']);
 
                     done();
                 }).catch(done);
@@ -508,9 +528,10 @@ describe('Post Model', function () {
 
                     // mysql does not store ms
                     moment(edited.attributes.published_at).startOf('seconds').diff(moment(newPublishedAt).startOf('seconds')).should.eql(0);
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('post.scheduled').should.be.true();
-                    eventSpy.secondCall.calledWith('post.edited').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.scheduled']);
+                    should.exist(eventsTriggered['post.edited']);
 
                     done();
                 }).catch(done);
@@ -530,9 +551,10 @@ describe('Post Model', function () {
                 }).then(function (edited) {
                     should.exist(edited);
                     edited.attributes.status.should.equal('draft');
-                    eventSpy.callCount.should.eql(2);
-                    eventSpy.firstCall.calledWith('post.unscheduled').should.be.true();
-                    eventSpy.secondCall.calledWith('post.edited').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.unscheduled']);
+                    should.exist(eventsTriggered['post.edited']);
 
                     done();
                 }).catch(done);
@@ -553,9 +575,10 @@ describe('Post Model', function () {
                 }).then(function (edited) {
                     should.exist(edited);
                     edited.attributes.status.should.equal('scheduled');
-                    eventSpy.callCount.should.eql(2);
-                    eventSpy.firstCall.calledWith('post.rescheduled').should.be.true();
-                    eventSpy.secondCall.calledWith('post.edited').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.rescheduled']);
+                    should.exist(eventsTriggered['post.edited']);
 
                     done();
                 }).catch(done);
@@ -575,8 +598,9 @@ describe('Post Model', function () {
                 }).then(function (edited) {
                     should.exist(edited);
                     edited.attributes.status.should.equal('scheduled');
-                    eventSpy.callCount.should.eql(1);
-                    eventSpy.firstCall.calledWith('post.edited').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(1);
+                    should.exist(eventsTriggered['post.edited']);
 
                     done();
                 }).catch(done);
@@ -620,18 +644,23 @@ describe('Post Model', function () {
                     should.exist(edited);
                     edited.attributes.status.should.equal('draft');
                     edited.attributes.page.should.equal(true);
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('post.deleted').should.be.true();
-                    eventSpy.secondCall.calledWith('page.added').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.deleted']);
+                    should.exist(eventsTriggered['page.added']);
 
                     return PostModel.edit({page: 0}, _.extend({}, context, {id: postId}));
                 }).then(function (edited) {
                     should.exist(edited);
                     edited.attributes.status.should.equal('draft');
                     edited.attributes.page.should.equal(false);
-                    eventSpy.callCount.should.equal(4);
-                    eventSpy.thirdCall.calledWith('page.deleted').should.be.true();
-                    eventSpy.lastCall.calledWith('post.added').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(4);
+                    should.exist(eventsTriggered['post.deleted']);
+                    should.exist(eventsTriggered['page.added']);
+                    should.exist(eventsTriggered['post.deleted']);
+                    should.exist(eventsTriggered['post.added']);
+
                     done();
                 }).catch(done);
             });
@@ -652,21 +681,24 @@ describe('Post Model', function () {
                     should.exist(edited);
                     edited.attributes.status.should.equal('scheduled');
                     edited.attributes.page.should.equal(true);
-                    eventSpy.callCount.should.be.eql(3);
-                    eventSpy.firstCall.calledWith('post.deleted').should.be.true();
-                    eventSpy.secondCall.calledWith('page.added').should.be.true();
-                    eventSpy.thirdCall.calledWith('page.scheduled').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(3);
+                    should.exist(eventsTriggered['post.deleted']);
+                    should.exist(eventsTriggered['page.added']);
+                    should.exist(eventsTriggered['page.scheduled']);
 
                     return PostModel.edit({page: 0}, _.extend({}, context, {id: edited.id}));
                 }).then(function (edited) {
                     should.exist(edited);
                     edited.attributes.status.should.equal('scheduled');
                     edited.attributes.page.should.equal(false);
-                    eventSpy.callCount.should.equal(7);
-                    eventSpy.getCall(3).calledWith('page.unscheduled').should.be.true();
-                    eventSpy.getCall(4).calledWith('page.deleted').should.be.true();
-                    eventSpy.getCall(5).calledWith('post.added').should.be.true();
-                    eventSpy.getCall(6).calledWith('post.scheduled').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(7);
+                    should.exist(eventsTriggered['page.unscheduled']);
+                    should.exist(eventsTriggered['page.deleted']);
+                    should.exist(eventsTriggered['post.added']);
+                    should.exist(eventsTriggered['post.scheduled']);
+
                     done();
                 }).catch(done);
             });
@@ -687,11 +719,11 @@ describe('Post Model', function () {
                     edited.attributes.status.should.equal('published');
                     edited.attributes.page.should.equal(true);
 
-                    eventSpy.callCount.should.equal(4);
-                    eventSpy.firstCall.calledWith('post.unpublished').should.be.true();
-                    eventSpy.secondCall.calledWith('post.deleted').should.be.true();
-                    eventSpy.thirdCall.calledWith('page.added').should.be.true();
-                    eventSpy.lastCall.calledWith('page.published').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(4);
+                    should.exist(eventsTriggered['post.unpublished']);
+                    should.exist(eventsTriggered['post.deleted']);
+                    should.exist(eventsTriggered['page.added']);
+                    should.exist(eventsTriggered['page.published']);
 
                     return PostModel.edit({page: 0}, _.extend({}, context, {id: postId}));
                 }).then(function (edited) {
@@ -699,11 +731,12 @@ describe('Post Model', function () {
                     edited.attributes.status.should.equal('published');
                     edited.attributes.page.should.equal(false);
 
-                    eventSpy.callCount.should.equal(8);
-                    eventSpy.getCall(4).calledWith('page.unpublished').should.be.true();
-                    eventSpy.getCall(5).calledWith('page.deleted').should.be.true();
-                    eventSpy.getCall(6).calledWith('post.added').should.be.true();
-                    eventSpy.getCall(7).calledWith('post.published').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(8);
+                    should.exist(eventsTriggered['page.unpublished']);
+                    should.exist(eventsTriggered['page.deleted']);
+                    should.exist(eventsTriggered['post.added']);
+                    should.exist(eventsTriggered['post.published']);
+
                     done();
                 }).catch(done);
             });
@@ -723,20 +756,23 @@ describe('Post Model', function () {
                     should.exist(edited);
                     edited.attributes.status.should.equal('published');
                     edited.attributes.page.should.equal(true);
-                    eventSpy.calledThrice.should.be.true();
-                    eventSpy.firstCall.calledWith('post.deleted').should.be.true();
-                    eventSpy.secondCall.calledWith('page.added').should.be.true();
-                    eventSpy.thirdCall.calledWith('page.published').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(3);
+                    should.exist(eventsTriggered['post.deleted']);
+                    should.exist(eventsTriggered['page.added']);
+                    should.exist(eventsTriggered['page.published']);
 
                     return PostModel.edit({page: 0, status: 'draft'}, _.extend({}, context, {id: postId}));
                 }).then(function (edited) {
                     should.exist(edited);
                     edited.attributes.status.should.equal('draft');
                     edited.attributes.page.should.equal(false);
-                    eventSpy.callCount.should.equal(6);
-                    eventSpy.getCall(3).calledWith('page.unpublished').should.be.true();
-                    eventSpy.getCall(4).calledWith('page.deleted').should.be.true();
-                    eventSpy.getCall(5).calledWith('post.added').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(6);
+                    should.exist(eventsTriggered['page.unpublished']);
+                    should.exist(eventsTriggered['page.deleted']);
+                    should.exist(eventsTriggered['post.added']);
+
                     done();
                 }).catch(done);
             });
@@ -805,6 +841,18 @@ describe('Post Model', function () {
         });
 
         describe('add', function () {
+            beforeEach(function () {
+                eventsTriggered = {};
+
+                sandbox.stub(events, 'emit', function (eventName, eventObj) {
+                    if (!eventsTriggered[eventName]) {
+                        eventsTriggered[eventName] = [];
+                    }
+
+                    eventsTriggered[eventName].push(eventObj);
+                });
+            });
+
             it('can add, defaults are all correct', function (done) {
                 var createdPostUpdatedDate,
                     newPost = testUtils.DataGenerator.forModel.posts[2],
@@ -841,8 +889,8 @@ describe('Post Model', function () {
 
                     createdPostUpdatedDate = createdPost.get('updated_at');
 
-                    eventSpy.calledOnce.should.be.true();
-                    eventSpy.firstCall.calledWith('post.added').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(1);
+                    should.exist(eventsTriggered['post.added']);
 
                     // Set the status to published to check that `published_at` is set.
                     return createdPost.save({status: 'published'}, context);
@@ -853,9 +901,9 @@ describe('Post Model', function () {
                     publishedPost.get('updated_by').should.equal(testUtils.DataGenerator.Content.users[0].id);
                     publishedPost.get('updated_at').should.not.equal(createdPostUpdatedDate);
 
-                    eventSpy.calledThrice.should.be.true();
-                    eventSpy.secondCall.calledWith('post.published').should.be.true();
-                    eventSpy.thirdCall.calledWith('post.edited').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(3);
+                    should.exist(eventsTriggered['post.published']);
+                    should.exist(eventsTriggered['post.edited']);
 
                     done();
                 }).catch(done);
@@ -895,9 +943,9 @@ describe('Post Model', function () {
                     should.exist(newPost);
                     new Date(newPost.get('published_at')).getTime().should.equal(previousPublishedAtDate.getTime());
 
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('post.added').should.be.true();
-                    eventSpy.secondCall.calledWith('post.published').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.added']);
+                    should.exist(eventsTriggered['post.published']);
 
                     done();
                 }).catch(done);
@@ -911,8 +959,10 @@ describe('Post Model', function () {
                 }, context).then(function (newPost) {
                     should.exist(newPost);
                     should.not.exist(newPost.get('published_at'));
-                    eventSpy.calledOnce.should.be.true();
-                    eventSpy.firstCall.calledWith('post.added').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(1);
+                    should.exist(eventsTriggered['post.added']);
+
                     done();
                 }).catch(done);
             });
@@ -926,8 +976,10 @@ describe('Post Model', function () {
                 }, context).then(function (newPost) {
                     should.exist(newPost);
                     should.exist(newPost.get('published_at'));
-                    eventSpy.calledOnce.should.be.true();
-                    eventSpy.firstCall.calledWith('post.added').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(1);
+                    should.exist(eventsTriggered['post.added']);
+
                     done();
                 }).catch(done);
             });
@@ -940,7 +992,7 @@ describe('Post Model', function () {
                 }, context).catch(function (err) {
                     should.exist(err);
                     (err instanceof errors.ValidationError).should.eql(true);
-                    eventSpy.called.should.be.false();
+                    Object.keys(eventsTriggered).length.should.eql(0);
                     done();
                 });
             });
@@ -954,7 +1006,7 @@ describe('Post Model', function () {
                 }, context).catch(function (err) {
                     should.exist(err);
                     (err instanceof errors.ValidationError).should.eql(true);
-                    eventSpy.called.should.be.false();
+                    Object.keys(eventsTriggered).length.should.eql(0);
                     done();
                 });
             });
@@ -967,7 +1019,7 @@ describe('Post Model', function () {
                     markdown: 'This is some content'
                 }, context).catch(function (err) {
                     (err instanceof errors.ValidationError).should.eql(true);
-                    eventSpy.called.should.be.false();
+                    Object.keys(eventsTriggered).length.should.eql(0);
                     done();
                 });
             });
@@ -980,9 +1032,11 @@ describe('Post Model', function () {
                     markdown: 'This is some content'
                 }, context).then(function (post) {
                     should.exist(post);
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('post.added').should.be.true();
-                    eventSpy.secondCall.calledWith('post.scheduled').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.added']);
+                    should.exist(eventsTriggered['post.scheduled']);
+
                     done();
                 }).catch(done);
             });
@@ -996,9 +1050,11 @@ describe('Post Model', function () {
                     markdown: 'This is some content'
                 }, context).then(function (post) {
                     should.exist(post);
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('page.added').should.be.true();
-                    eventSpy.secondCall.calledWith('page.scheduled').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['page.added']);
+                    should.exist(eventsTriggered['page.scheduled']);
+
                     done();
                 }).catch(done);
             });
@@ -1028,15 +1084,15 @@ describe('Post Model', function () {
                     should.exist(createdPost);
                     createdPost.get('title').should.equal(untrimmedCreateTitle.trim());
 
-                    eventSpy.calledOnce.should.be.true();
-                    eventSpy.firstCall.calledWith('post.added').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(1);
+                    should.exist(eventsTriggered['post.added']);
 
                     return createdPost.save({title: untrimmedUpdateTitle}, context);
                 }).then(function (updatedPost) {
                     updatedPost.get('title').should.equal(untrimmedUpdateTitle.trim());
 
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.secondCall.calledWith('post.edited').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.edited']);
 
                     done();
                 }).catch(done);
@@ -1054,7 +1110,6 @@ describe('Post Model', function () {
                 })).then(function (createdPosts) {
                     // Should have created 12 posts
                     createdPosts.length.should.equal(12);
-                    eventSpy.callCount.should.equal(12);
 
                     // Should have unique slugs and contents
                     _(createdPosts).each(function (post, i) {
@@ -1068,7 +1123,10 @@ describe('Post Model', function () {
 
                         post.get('slug').should.equal('test-title-' + num);
                         post.get('markdown').should.equal('Test Content ' + num);
-                        eventSpy.getCall(i).calledWith('post.added').should.be.true();
+
+                        Object.keys(eventsTriggered).length.should.eql(1);
+                        should.exist(eventsTriggered['post.added']);
+                        eventsTriggered['post.added'].length.should.eql(12);
                     });
 
                     done();
@@ -1083,8 +1141,9 @@ describe('Post Model', function () {
 
                 PostModel.add(newPost, context).then(function (createdPost) {
                     createdPost.get('slug').should.equal('apprehensive-titles-have-too-many-spaces-and-m-dashes-and-also-n-dashes');
-                    eventSpy.calledOnce.should.be.true();
-                    eventSpy.firstCall.calledWith('post.added').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(1);
+                    should.exist(eventsTriggered['post.added']);
 
                     done();
                 }).catch(done);
@@ -1098,8 +1157,9 @@ describe('Post Model', function () {
 
                 PostModel.add(newPost, context).then(function (createdPost) {
                     createdPost.get('slug').should.not.equal('rss');
-                    eventSpy.calledOnce.should.be.true();
-                    eventSpy.firstCall.calledWith('post.added').should.be.true();
+
+                    Object.keys(eventsTriggered).length.should.eql(1);
+                    should.exist(eventsTriggered['post.added']);
 
                     done();
                 });
@@ -1132,16 +1192,18 @@ describe('Post Model', function () {
                     .then(function (createdFirstPost) {
                         // Store the slug for later
                         firstPost.slug = createdFirstPost.get('slug');
-                        eventSpy.calledOnce.should.be.true();
-                        eventSpy.firstCall.calledWith('post.added').should.be.true();
+
+                        Object.keys(eventsTriggered).length.should.eql(1);
+                        should.exist(eventsTriggered['post.added']);
 
                         // Create the second post
                         return PostModel.add(secondPost, context);
                     }).then(function (createdSecondPost) {
                         // Store the slug for comparison later
                         secondPost.slug = createdSecondPost.get('slug');
-                        eventSpy.calledTwice.should.be.true();
-                        eventSpy.secondCall.calledWith('post.added').should.be.true();
+
+                        Object.keys(eventsTriggered).length.should.eql(1);
+                        should.exist(eventsTriggered['post.added']);
 
                         // Update with a conflicting slug from the first post
                         return createdSecondPost.save({
@@ -1153,8 +1215,8 @@ describe('Post Model', function () {
                         // Should not have a conflicted slug from the first
                         updatedSecondPost.get('slug').should.not.equal(firstPost.slug);
 
-                        eventSpy.calledThrice.should.be.true();
-                        eventSpy.thirdCall.calledWith('post.edited').should.be.true();
+                        Object.keys(eventsTriggered).length.should.eql(2);
+                        should.exist(eventsTriggered['post.edited']);
 
                         return PostModel.findOne({
                             id: updatedSecondPost.id,
@@ -1172,6 +1234,17 @@ describe('Post Model', function () {
         });
 
         describe('destroy', function () {
+            beforeEach(function () {
+                eventsTriggered = {};
+                sandbox.stub(events, 'emit', function (eventName, eventObj) {
+                    if (!eventsTriggered[eventName]) {
+                        eventsTriggered[eventName] = [];
+                    }
+
+                    eventsTriggered[eventName].push(eventObj);
+                });
+            });
+
             it('published post', function (done) {
                 // We're going to try deleting post id 1 which has tag id 1
                 var firstItemData = {id: testUtils.DataGenerator.Content.posts[0].id};
@@ -1193,9 +1266,9 @@ describe('Post Model', function () {
 
                     should.equal(deleted.author, undefined);
 
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('post.unpublished').should.be.true();
-                    eventSpy.secondCall.calledWith('post.deleted').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['post.unpublished']);
+                    should.exist(eventsTriggered['post.deleted']);
 
                     // Double check we can't find the post again
                     return PostModel.findOne(firstItemData);
@@ -1231,8 +1304,8 @@ describe('Post Model', function () {
 
                     should.equal(deleted.author, undefined);
 
-                    eventSpy.calledOnce.should.be.true();
-                    eventSpy.firstCall.calledWith('post.deleted').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(1);
+                    should.exist(eventsTriggered['post.deleted']);
 
                     // Double check we can't find the post again
                     return PostModel.findOne(firstItemData);
@@ -1268,9 +1341,9 @@ describe('Post Model', function () {
 
                     should.equal(deleted.author, undefined);
 
-                    eventSpy.calledTwice.should.be.true();
-                    eventSpy.firstCall.calledWith('page.unpublished').should.be.true();
-                    eventSpy.secondCall.calledWith('page.deleted').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(2);
+                    should.exist(eventsTriggered['page.unpublished']);
+                    should.exist(eventsTriggered['page.deleted']);
 
                     // Double check we can't find the post again
                     return PostModel.findOne(firstItemData);
@@ -1304,8 +1377,8 @@ describe('Post Model', function () {
 
                     should.equal(deleted.author, undefined);
 
-                    eventSpy.calledOnce.should.be.true();
-                    eventSpy.firstCall.calledWith('page.deleted').should.be.true();
+                    Object.keys(eventsTriggered).length.should.eql(1);
+                    should.exist(eventsTriggered['page.deleted']);
 
                     // Double check we can't find the post again
                     return PostModel.findOne(firstItemData);

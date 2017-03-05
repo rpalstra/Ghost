@@ -8,16 +8,17 @@ var debug = require('debug')('ghost:admin'),
 
     // Global/shared middleware?
     cacheControl = require('../middleware/cache-control'),
-    checkSSL = require('../middleware/check-ssl'),
-    errorHandler = require('../middleware//error-handler'),
+    urlRedirects = require('../middleware/url-redirects'),
+    errorHandler = require('../middleware/error-handler'),
     maintenance = require('../middleware/maintenance'),
-    prettyURLs = require('../middleware//pretty-urls'),
+    prettyURLs = require('../middleware/pretty-urls'),
     serveStatic = require('express').static,
     utils = require('../utils');
 
 module.exports = function setupAdminApp() {
     debug('Admin setup start');
-    var adminApp = express();
+    var adminApp = express(),
+        configMaxAge;
 
     // First determine whether we're serving admin or theme content
     // @TODO finish refactoring this away.
@@ -36,17 +37,21 @@ module.exports = function setupAdminApp() {
 
     // Admin assets
     // @TODO ensure this gets a local 404 error handler
+    configMaxAge = config.get('caching:admin:maxAge');
     adminApp.use('/assets', serveStatic(
         config.get('paths').clientAssets,
-        {maxAge: utils.ONE_YEAR_MS, fallthrough: false}
+        {maxAge: (configMaxAge || configMaxAge === 0) ? configMaxAge : utils.ONE_YEAR_MS, fallthrough: false}
     ));
+
+    // Service Worker for offline support
+    adminApp.get(/^\/(sw.js|sw-registration.js)$/, require('./serviceworker'));
 
     // Render error page in case of maintenance
     adminApp.use(maintenance);
 
     // Force SSL if required
     // must happen AFTER asset loading and BEFORE routing
-    adminApp.use(checkSSL);
+    adminApp.use(urlRedirects);
 
     // Add in all trailing slashes & remove uppercase
     // must happen AFTER asset loading and BEFORE routing

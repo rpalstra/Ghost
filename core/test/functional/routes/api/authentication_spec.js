@@ -1,19 +1,26 @@
 var supertest     = require('supertest'),
     should        = require('should'),
+    moment        = require('moment'),
     testUtils     = require('../../../utils'),
     user          = testUtils.DataGenerator.forModel.users[0],
+    userForKnex   = testUtils.DataGenerator.forKnex.users[0],
+    models        = require('../../../../../core/server/models'),
     config        = require('../../../../../core/server/config'),
+    utils         = require('../../../../../core/server/utils'),
     ghost         = testUtils.startGhost,
     request;
 
 describe('Authentication API', function () {
-    var accesstoken = '';
+    var accesstoken = '', ghostServer;
 
     before(function (done) {
         // starting ghost automatically populates the db
         // TODO: prevent db init, and manage bringing up the DB with fixtures ourselves
-        ghost().then(function (ghostServer) {
-            request = supertest.agent(ghostServer.rootApp);
+        ghost().then(function (_ghostServer) {
+            ghostServer = _ghostServer;
+            return ghostServer.start();
+        }).then(function () {
+            request = supertest.agent(config.get('url'));
         }).then(function () {
             return testUtils.doAuth(request);
         }).then(function (token) {
@@ -28,10 +35,11 @@ describe('Authentication API', function () {
         });
     });
 
-    after(function (done) {
-        testUtils.clearData().then(function () {
-            done();
-        }).catch(done);
+    after(function () {
+        return testUtils.clearData()
+            .then(function () {
+                return ghostServer.stop();
+            });
     });
 
     it('can authenticate', function (done) {
@@ -119,7 +127,8 @@ describe('Authentication API', function () {
                 password: user.password,
                 client_id: 'ghost-admin',
                 client_secret: 'not_available'
-            }).expect('Content-Type', /json/)
+            })
+            .expect('Content-Type', /json/)
             // TODO: make it possible to override oauth2orize's header so that this is consistent
             .expect('Cache-Control', 'no-store')
             .expect(200)
@@ -127,27 +136,44 @@ describe('Authentication API', function () {
                 if (err) {
                     return done(err);
                 }
+
                 var refreshToken = res.body.refresh_token;
-                request.post(testUtils.API.getApiQuery('authentication/token'))
-                    .set('Origin', config.get('url'))
-                    .send({
-                        grant_type: 'refresh_token',
-                        refresh_token: refreshToken,
-                        client_id: 'ghost-admin',
-                        client_secret: 'not_available'
-                    }).expect('Content-Type', /json/)
-                    // TODO: make it possible to override oauth2orize's header so that this is consistent
-                    .expect('Cache-Control', 'no-store')
-                    .expect(200)
-                    .end(function (err, res) {
-                        if (err) {
-                            return done(err);
-                        }
-                        var jsonResponse = res.body;
-                        should.exist(jsonResponse.access_token);
-                        should.exist(jsonResponse.expires_in);
-                        done();
-                    });
+
+                models.Accesstoken.findOne({
+                    token: accesstoken
+                }).then(function (oldAccessToken) {
+                    moment(oldAccessToken.get('expires')).diff(moment(), 'minutes').should.be.above(6);
+
+                    request.post(testUtils.API.getApiQuery('authentication/token'))
+                        .set('Origin', config.get('url'))
+                        .set('Authorization', 'Bearer ' + accesstoken)
+                        .send({
+                            grant_type: 'refresh_token',
+                            refresh_token: refreshToken,
+                            client_id: 'ghost-admin',
+                            client_secret: 'not_available'
+                        })
+                        .expect('Content-Type', /json/)
+                        // TODO: make it possible to override oauth2orize's header so that this is consistent
+                        .expect('Cache-Control', 'no-store')
+                        .expect(200)
+                        .end(function (err, res) {
+                            if (err) {
+                                return done(err);
+                            }
+
+                            var jsonResponse = res.body;
+                            should.exist(jsonResponse.access_token);
+                            should.exist(jsonResponse.expires_in);
+
+                            models.Accesstoken.findOne({
+                                token: accesstoken
+                            }).then(function (oldAccessToken) {
+                                moment(oldAccessToken.get('expires')).diff(moment(), 'minutes').should.be.below(6);
+                                done();
+                            });
+                        });
+                });
             });
     });
 
@@ -172,5 +198,40 @@ describe('Authentication API', function () {
                 jsonResponse.errors[0].errorType.should.eql('NoPermissionError');
                 done();
             });
+    });
+
+    it('reset password', function (done) {
+        models.Settings
+            .findOne({key: 'dbHash'})
+            .then(function (response) {
+                var token = utils.tokens.resetToken.generateHash({
+                    expires: Date.now() + (1000 * 60),
+                    email: user.email,
+                    dbHash: response.attributes.value,
+                    password: userForKnex.password
+                });
+
+                request.put(testUtils.API.getApiQuery('authentication/passwordreset'))
+                    .set('Origin', config.get('url'))
+                    .set('Accept', 'application/json')
+                    .send({
+                        passwordreset: [{
+                            token: token,
+                            newPassword: 'abcdefgh',
+                            ne2Password: 'abcdefgh'
+                        }]
+                    })
+                    .expect('Content-Type', /json/)
+                    .expect('Cache-Control', testUtils.cacheRules.private)
+                    .expect(200)
+                    .end(function (err) {
+                        if (err) {
+                            return done(err);
+                        }
+
+                        done();
+                    });
+            })
+            .catch(done);
     });
 });

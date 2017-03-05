@@ -4,13 +4,10 @@ var should          = require('should'),
     _               = require('lodash'),
     Promise         = require('bluebird'),
     testUtils       = require('../utils'),
-
     channelConfig   = require('../../server/controllers/frontend/channel-config'),
-
-    // Things that get overridden
     api             = require('../../server/api'),
+    settingsCache   = require('../../server/settings/cache'),
     rss             = rewire('../../server/data/xml/rss'),
-
     configUtils     = require('../utils/configUtils');
 
 // Helper function to prevent unit tests
@@ -281,6 +278,7 @@ describe('RSS', function () {
 
     describe('dataBuilder', function () {
         var apiBrowseStub, apiTagStub, apiUserStub;
+
         beforeEach(function () {
             apiBrowseStub = sandbox.stub(api.posts, 'browse', function () {
                 return Promise.resolve({posts: [], meta: {pagination: {pages: 3}}});
@@ -306,11 +304,19 @@ describe('RSS', function () {
                 set: sinon.stub()
             };
 
-            configUtils.set({url: 'http://my-ghost-blog.com', theme: {
-                title: 'Test',
-                description: 'Some Text',
-                permalinks: '/:slug/'
-            }});
+            sandbox.stub(settingsCache, 'get', function (key) {
+                var obj = {
+                    title: 'Test',
+                    description: 'Some Text',
+                    permalinks: '/:slug/'
+                };
+
+                return obj[key];
+            });
+
+            configUtils.set({
+                url: 'http://my-ghost-blog.com'
+            });
         });
 
         it('should process the data correctly for the index feed', function (done) {

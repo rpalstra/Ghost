@@ -23,8 +23,7 @@ function ping(post) {
         title = post.title,
         url = utils.url.urlFor('post', {post: post}, true);
 
-    // Only ping when in production and not a page
-    if (config.get('env') !== 'production' || post.page || config.isPrivacyDisabled('useRpcPing')) {
+    if (post.page || config.isPrivacyDisabled('useRpcPing')) {
         return;
     }
 
@@ -72,6 +71,7 @@ function ping(post) {
         req.on('error', function handleError(err) {
             logging.error(new errors.GhostError({
                 err: err,
+                message: err.message,
                 context: i18n.t('errors.data.xml.xmlrpc.pingUpdateFailed.error'),
                 help: i18n.t('errors.data.xml.xmlrpc.pingUpdateFailed.help', {url: 'http://support.ghost.org'})
             }));

@@ -30,25 +30,25 @@ var crypto   = require('crypto'),
     url      = require('url'),
     api      = require('./api'),
     config   = require('./config'),
+    utils    = require('./utils'),
     logging  = require('./logging'),
     errors   = require('./errors'),
     i18n     = require('./i18n'),
     currentVersion = require('./utils/ghost-version').full,
     internal = {context: {internal: true}},
-    allowedCheckEnvironments = ['development', 'production'],
     checkEndpoint = 'updates.ghost.org';
 
 function updateCheckError(err) {
+    err = errors.utils.deserialize(err);
+
     api.settings.edit(
         {settings: [{key: 'nextUpdateCheck', value: Math.round(Date.now() / 1000 + 24 * 3600)}]},
         internal
     );
 
-    logging.error(new errors.GhostError({
-        err: err,
-        context: i18n.t('errors.update-check.checkingForUpdatesFailed.error'),
-        help: i18n.t('errors.update-check.checkingForUpdatesFailed.help', {url: 'http://support.ghost.org'})
-    }));
+    err.context = i18n.t('errors.update-check.checkingForUpdatesFailed.error');
+    err.help = i18n.t('errors.update-check.checkingForUpdatesFailed.help', {url: 'http://support.ghost.org'});
+    logging.error(err);
 }
 
 /**
@@ -88,7 +88,7 @@ function updateCheckData() {
 
     data.ghost_version   = currentVersion;
     data.node_version    = process.versions.node;
-    data.env             = process.env.NODE_ENV;
+    data.env             = config.get('env');
     data.database_type   = config.get('database').client;
     data.email_transport = mailConfig &&
     (mailConfig.options && mailConfig.options.service ?
@@ -116,7 +116,7 @@ function updateCheckData() {
             posts            = descriptors.posts.value(),
             users            = descriptors.users.value(),
             npm              = descriptors.npm.value(),
-            blogUrl          = url.parse(config.get('url')),
+            blogUrl          = url.parse(utils.url.urlFor('home', true)),
             blogId           = blogUrl.hostname + blogUrl.pathname.replace(/\//, '') + hash.value;
 
         data.blog_id         = crypto.createHash('md5').update(blogId).digest('hex');
@@ -126,6 +126,7 @@ function updateCheckData() {
         data.user_count      = users && users.users && users.users.length ? users.users.length : 0;
         data.blog_created_at = users && users.users && users.users[0] && users.users[0].created_at ? moment(users.users[0].created_at).unix() : '';
         data.npm_version     = npm.trim();
+        data.lts             = false;
 
         return data;
     }).catch(updateCheckError);
@@ -155,6 +156,11 @@ function updateCheckRequest() {
                 res.on('end', function onEnd() {
                     try {
                         resData = JSON.parse(resData);
+
+                        if (this.statusCode >= 400) {
+                            return reject(resData);
+                        }
+
                         resolve(resData);
                     } catch (e) {
                         reject(i18n.t('errors.update-check.unableToDecodeUpdateResponse.error'));
@@ -202,18 +208,17 @@ function updateCheckResponse(response) {
         api.settings.edit({settings: [{key: 'displayUpdateNotification', value: response.version}]}, internal)
     ]).then(function () {
         var messages = response.messages || [];
+
+        /**
+         * by default the update check service returns messages: []
+         * but the latest release version get's stored anyway, because we adding the `displayUpdateNotification` ^
+         */
         return Promise.map(messages, createCustomNotification);
     });
 }
 
 function updateCheck() {
-    // The check will not happen if:
-    // 1. updateCheck is defined as false in config.js
-    // 2. we've already done a check this session
-    // 3. we're not in production or development mode
-    // TODO: need to remove config.updateCheck in favor of config.privacy.updateCheck in future version (it is now deprecated)
-    if (config.get('updateCheck') === false || config.isPrivacyDisabled('useUpdateCheck') || _.indexOf(allowedCheckEnvironments, process.env.NODE_ENV) === -1) {
-        // No update check
+    if (config.isPrivacyDisabled('useUpdateCheck')) {
         return Promise.resolve();
     } else {
         return api.settings.read(_.extend({key: 'nextUpdateCheck'}, internal)).then(function then(result) {
@@ -235,13 +240,6 @@ function updateCheck() {
 function showUpdateNotification() {
     return api.settings.read(_.extend({key: 'displayUpdateNotification'}, internal)).then(function then(response) {
         var display = response.settings[0];
-
-        // Version 0.4 used boolean to indicate the need for an update. This special case is
-        // translated to the version string.
-        // TODO: remove in future version.
-        if (display.value === 'false' || display.value === 'true' || display.value === '1' || display.value === '0') {
-            display.value = '0.4.0';
-        }
 
         if (display && display.value && currentVersion && semver.gt(display.value, currentVersion)) {
             return display.value;

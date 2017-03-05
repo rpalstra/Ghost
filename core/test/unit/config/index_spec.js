@@ -1,22 +1,12 @@
-var should         = require('should'),
-    sinon          = require('sinon'),
-    Promise        = require('bluebird'),
-    moment         = require('moment'),
-    path           = require('path'),
-    fs             = require('fs'),
-    _              = require('lodash'),
+// jscs:disable requireDotNotation
 
-    testUtils      = require('../../utils'),
-    i18n           = require('../../../server/i18n'),
-    utils          = require('../../../server/utils'),
-    /*jshint unused:false*/
-    db             = require('../../../server/data/db/connection'),
+var should = require('should'),
+    path = require('path'),
+    rewire = require('rewire'),
+    _ = require('lodash'),
+    configUtils = require('../../utils/configUtils');
 
-    // Thing we are testing
-    configUtils    = require('../../utils/configUtils'),
-    config         = configUtils.config;
-
-i18n.init();
+should.equal(true, true);
 
 describe('Config', function () {
     before(function () {
@@ -27,67 +17,74 @@ describe('Config', function () {
         configUtils.restore();
     });
 
-    describe('Theme', function () {
+    describe('hierarchy of config channels', function () {
+        var originalEnv, originalArgv, customConfig, config;
+
         beforeEach(function () {
-            configUtils.set({
-                url: 'http://my-ghost-blog.com',
-                theme: {
-                    title: 'casper',
-                    description: 'casper',
-                    logo: 'casper',
-                    cover: 'casper',
-                    timezone: 'Etc/UTC'
-                }
-            });
+            originalEnv = _.clone(process.env);
+            originalArgv = _.clone(process.argv);
+            config = rewire('../../../server/config');
         });
 
-        it('should have exactly the right keys', function () {
-            var themeConfig = config.get('theme');
-
-            // This will fail if there are any extra keys
-            themeConfig.should.have.keys('title', 'description', 'logo', 'cover', 'timezone');
+        afterEach(function () {
+            process.env = originalEnv;
+            process.argv = originalArgv;
         });
 
-        it('should have the correct values for each key', function () {
-            var themeConfig = config.get('theme');
+        it('env parameter is stronger than file', function () {
+            process.env['database__client'] = 'test';
 
-            // Check values are as we expect
-            themeConfig.should.have.property('title', 'casper');
-            themeConfig.should.have.property('description', 'casper');
-            themeConfig.should.have.property('logo', 'casper');
-            themeConfig.should.have.property('cover', 'casper');
-            themeConfig.should.have.property('timezone', 'Etc/UTC');
-        });
-    });
-
-    describe('Timezone default', function () {
-        it('should use timezone from settings when set', function () {
-            var themeConfig = config.get('theme');
-
-            // Check values are as we expect
-            themeConfig.should.have.property('timezone', 'Etc/UTC');
-
-            configUtils.set({
-                theme: {
-                    timezone: 'Africa/Cairo'
-                }
+            customConfig = config.loadNconf({
+                baseConfigPath: path.join(__dirname, '../../utils/fixtures/config'),
+                customConfigPath: path.join(__dirname, '../../utils/fixtures/config')
             });
 
-            config.get('theme').should.have.property('timezone', 'Africa/Cairo');
+            customConfig.get('database:client').should.eql('test');
         });
 
-        it('should set theme object with timezone by default', function () {
-            var themeConfig = configUtils.defaultConfig;
+        it('argv is stronger than env parameter', function () {
+            process.env['database__client'] = 'test';
+            process.argv[2] = '--database:client=stronger';
 
-            // Check values are as we expect
-            themeConfig.should.have.property('theme');
-            themeConfig.theme.should.have.property('timezone', 'Etc/UTC');
+            customConfig = config.loadNconf({
+                baseConfigPath: path.join(__dirname, '../../utils/fixtures/config'),
+                customConfigPath: path.join(__dirname, '../../utils/fixtures/config')
+            });
+
+            customConfig.get('database:client').should.eql('stronger');
+        });
+
+        it('argv or env is NOT stronger than overrides', function () {
+            process.env['paths__corePath'] = 'try-to-override';
+            process.argv[2] = '--paths:corePath=try-to-override';
+
+            customConfig = config.loadNconf({
+                baseConfigPath: path.join(__dirname, '../../utils/fixtures/config'),
+                customConfigPath: path.join(__dirname, '../../utils/fixtures/config')
+            });
+
+            customConfig.get('paths:corePath').should.not.containEql('try-to-override');
+        });
+
+        it('overrides is stronger than every other config file', function () {
+            customConfig = config.loadNconf({
+                baseConfigPath: path.join(__dirname, '../../utils/fixtures/config'),
+                customConfigPath: path.join(__dirname, '../../utils/fixtures/config')
+            });
+
+            customConfig.get('paths:corePath').should.not.containEql('try-to-override');
+            customConfig.get('database:client').should.eql('sqlite3');
+            customConfig.get('database:connection:filename').should.eql('/hehe.db');
+            customConfig.get('database:debug').should.eql(true);
+            customConfig.get('url').should.eql('http://localhost:2368');
+            customConfig.get('logging:level').should.eql('error');
+            customConfig.get('logging:transports').should.eql(['stdout']);
         });
     });
 
     describe('Index', function () {
         it('should have exactly the right keys', function () {
-            var pathConfig = config.get('paths');
+            var pathConfig = configUtils.config.get('paths');
 
             // This will fail if there are any extra keys
             pathConfig.should.have.keys(
@@ -97,7 +94,6 @@ describe('Config', function () {
                 'contentPath',
                 'corePath',
                 'internalAppPath',
-                'imagesRelPath',
                 'adminViews',
                 'helperTemplates',
                 'clientAssets'
@@ -105,35 +101,32 @@ describe('Config', function () {
         });
 
         it('should have the correct values for each key', function () {
-            var pathConfig = config.get('paths'),
+            var pathConfig = configUtils.config.get('paths'),
                 appRoot = path.resolve(__dirname, '../../../../');
 
             pathConfig.should.have.property('appRoot', appRoot);
-            pathConfig.should.have.property('imagesRelPath', 'content/images');
         });
 
         it('should allow specific properties to be user defined', function () {
-            var contentPath = path.join(config.get('paths').appRoot, 'otherContent', '/');
+            var contentPath = path.join(configUtils.config.get('paths').appRoot, 'otherContent', '/');
 
             configUtils.set('paths:contentPath', contentPath);
-            config.get('paths').should.have.property('contentPath', contentPath);
-            config.getContentPath('images').should.eql(contentPath + 'images/');
+            configUtils.config.get('paths').should.have.property('contentPath', contentPath);
+            configUtils.config.getContentPath('images').should.eql(contentPath + 'images/');
         });
     });
 
     describe('Storage', function () {
         it('should default to local-file-store', function () {
-            config.get('paths').should.have.property('internalStoragePath', path.join(config.get('paths').corePath, '/server/storage/'));
+            configUtils.config.get('paths').should.have.property('internalStoragePath', path.join(configUtils.config.get('paths').corePath, '/server/storage/'));
 
-            config.get('storage').should.have.property('active', {
+            configUtils.config.get('storage').should.have.property('active', {
                 images: 'local-file-store',
                 themes: 'local-file-store'
             });
         });
 
         it('no effect: setting a custom active storage as string', function () {
-            var storagePath = path.join(config.get('paths').contentPath, 'storage', 's3');
-
             configUtils.set({
                 storage: {
                     active: 's3',
@@ -141,8 +134,8 @@ describe('Config', function () {
                 }
             });
 
-            config.get('storage').should.have.property('active', 's3');
-            config.get('storage').should.have.property('s3', {});
+            configUtils.config.get('storage').should.have.property('active', 's3');
+            configUtils.config.get('storage').should.have.property('s3', {});
         });
 
         it('able to set storage for themes (but not officially supported!)', function () {
@@ -155,15 +148,13 @@ describe('Config', function () {
                 }
             });
 
-            config.get('storage').should.have.property('active', {
+            configUtils.config.get('storage').should.have.property('active', {
                 images: 'local-file-store',
                 themes: 's3'
             });
         });
 
         it('should allow setting a custom active storage as object', function () {
-            var storagePath = path.join(config.get('paths').contentPath, 'storage', 's3');
-
             configUtils.set({
                 storage: {
                     active: {
@@ -173,7 +164,7 @@ describe('Config', function () {
                 }
             });
 
-            config.get('storage').should.have.property('active', {
+            configUtils.config.get('storage').should.have.property('active', {
                 images: 's2',
                 themes: 'local-file-store'
             });

@@ -133,38 +133,6 @@ function setupTasks(setupData) {
  */
 authentication = {
     /**
-     * Generate a pair of tokens
-     */
-    createTokens: function createTokens(data, options) {
-        var localAccessToken = globalUtils.uid(191),
-            localRefreshToken = globalUtils.uid(191),
-            accessExpires = Date.now() + globalUtils.ONE_HOUR_MS,
-            refreshExpires = Date.now() + globalUtils.ONE_WEEK_MS,
-            client = options.context.client_id,
-            user = options.context.user;
-
-        return models.Accesstoken.add({
-            token: localAccessToken,
-            user_id: user,
-            client_id: client,
-            expires: accessExpires
-        }).then(function () {
-            return models.Refreshtoken.add({
-                token: localRefreshToken,
-                user_id: user,
-                client_id: client,
-                expires: refreshExpires
-            });
-        }).then(function () {
-            return {
-                access_token: localAccessToken,
-                refresh_token: localRefreshToken,
-                expires_in: globalUtils.ONE_HOUR_S
-            };
-        });
-    },
-
-    /**
      * @description generate a reset token for a given email address
      * @param {Object} object
      * @returns {Promise<Object>} message
@@ -216,8 +184,8 @@ authentication = {
         }
 
         function sendResetNotification(data) {
-            var baseUrl = config.get('forceAdminSSL') ? (config.get('urlSSL') || config.get('url')) : config.get('url'),
-                resetUrl = globalUtils.url.urlJoin(baseUrl, 'ghost/reset', globalUtils.encodeBase64URLsafe(data.resetToken), '/');
+            var adminUrl = globalUtils.url.urlFor('admin', true),
+                resetUrl = globalUtils.url.urlJoin(adminUrl, 'reset', globalUtils.encodeBase64URLsafe(data.resetToken), '/');
 
             return mail.utils.generateContent({
                 data: {
@@ -266,7 +234,7 @@ authentication = {
      * @param {Object} object
      * @returns {Promise<Object>} message
      */
-    resetPassword: function resetPassword(object) {
+    resetPassword: function resetPassword(object, opts) {
         var tasks, tokenIsCorrect, dbHash, options = {context: {internal: true}}, tokenParts;
 
         function validateRequest() {
@@ -341,7 +309,7 @@ authentication = {
                         }));
                     }
 
-                    spamPrevention.userLogin.reset(null, options.data.connection + tokenParts.email + 'login');
+                    spamPrevention.userLogin.reset(opts.ip, tokenParts.email + 'login');
 
                     return models.User.changePassword({
                         oldPassword: oldPassword,
@@ -504,16 +472,10 @@ authentication = {
      * @return {Promise}
      */
     isSetup: function isSetup() {
-        var tasks,
-            validStatuses = ['active', 'warn-1', 'warn-2', 'warn-3', 'warn-4', 'locked'];
+        var tasks;
 
         function checkSetupStatus() {
-            return models.User
-                .where('status', 'in', validStatuses)
-                .count('id')
-                .then(function (count) {
-                    return !!count;
-                });
+            return models.User.isSetup();
         }
 
         function formatResponse(isSetup) {

@@ -5,7 +5,9 @@ var _          = require('lodash'),
     nodemailer = require('nodemailer'),
     validator  = require('validator'),
     config     = require('../config'),
-    i18n       = require('../i18n');
+    settingsCache = require('../settings/cache'),
+    i18n       = require('../i18n'),
+    utils      = require('../utils');
 
 function GhostMailer() {
     var transport = config.get('mail') && config.get('mail').transport || 'direct',
@@ -30,8 +32,7 @@ GhostMailer.prototype.from = function () {
 
     // If we do have a from address, and it's just an email
     if (validator.isEmail(from)) {
-        defaultBlogTitle = config.get('theme').title ? config.get('theme').title : i18n.t('common.mail.title', {domain: this.getDomain()});
-
+        defaultBlogTitle = settingsCache.get('title') || i18n.t('common.mail.title', {domain: this.getDomain()});
         from = '"' + defaultBlogTitle + '" <' + from + '>';
     }
 
@@ -40,7 +41,7 @@ GhostMailer.prototype.from = function () {
 
 // Moved it to its own module
 GhostMailer.prototype.getDomain = function () {
-    var domain = config.get('url').match(new RegExp('^https?://([^/:?#]+)(?:[/:?#]|$)', 'i'));
+    var domain = utils.url.urlFor('home', true).match(new RegExp('^https?://([^/:?#]+)(?:[/:?#]|$)', 'i'));
     return domain && domain[1];
 };
 

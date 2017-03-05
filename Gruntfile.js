@@ -280,7 +280,7 @@ var overrides      = require('./core/server/overrides'),
                     },
                     expand: true,
                     cwd: '<%= paths.releaseBuild %>/',
-                    src: ['**', '.knex-migrator']
+                    src: ['**']
                 }
             },
 
@@ -404,24 +404,6 @@ var overrides      = require('./core/server/overrides'),
                 process.env.NODE_ENV = process.env.TRAVIS ? process.env.NODE_ENV : 'testing';
                 cfg.express.test.options.node_env = process.env.NODE_ENV;
             });
-
-        // #### Reset Database to "New" state *(Utility Task)*
-        // Drops all database tables and then runs the migration process to put the database
-        // in a "new" state.
-        grunt.registerTask('cleanDatabase', function () {
-            var done = this.async(),
-                models    = require('./core/server/models'),
-                migration = require('./core/server/data/migration');
-
-            migration.reset().then(function () {
-                models.init();
-                return migration.init();
-            }).then(function () {
-                done();
-            }).catch(function (err) {
-                grunt.fail.fatal(err.stack);
-            });
-        });
 
         // ### Test
         // **Testing utility**
@@ -719,9 +701,9 @@ var overrides      = require('./core/server/overrides'),
                     // A list of files and patterns to include when creating a release zip.
                     // This is read from the `.npmignore` file and all patterns are inverted as the `.npmignore`
                     // file defines what to ignore, whereas we want to define what to include.
-                    src: ['.knex-migrator'].concat(fs.readFileSync('.npmignore', 'utf8').split('\n').filter(Boolean).map(function (pattern) {
+                    src: fs.readFileSync('.npmignore', 'utf8').split('\n').filter(Boolean).map(function (pattern) {
                         return pattern[0] === '!' ? pattern.substr(1) : '!' + pattern;
-                    })),
+                    }),
                     dest: '<%= paths.releaseBuild %>/'
                 });
 

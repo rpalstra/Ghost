@@ -5,16 +5,17 @@ var Promise       = require('bluebird'),
     Module        = require('module'),
     debug         = require('debug')('ghost:test'),
     ObjectId      = require('bson-objectid'),
-    uuid          = require('node-uuid'),
+    uuid          = require('uuid'),
     KnexMigrator  = require('knex-migrator'),
     ghost         = require('../../server'),
     errors        = require('../../server/errors'),
     db            = require('../../server/data/db'),
-    fixtureUtils  = require('../../server/data/migration/fixtures/utils'),
+    fixtureUtils  = require('../../server/data/schema/fixtures/utils'),
     models        = require('../../server/models'),
-    SettingsAPI   = require('../../server/api/settings'),
+    SettingsLib   = require('../../server/settings'),
     permissions   = require('../../server/permissions'),
     sequence      = require('../../server/utils/sequence'),
+    themes        = require('../../server/themes'),
     DataGenerator = require('./fixtures/data-generator'),
     filterData    = require('./fixtures/filter-param'),
     API           = require('./api'),
@@ -386,6 +387,17 @@ fixtures = {
         return db.knex('clients').insert(DataGenerator.forKnex.clients);
     },
 
+    insertClientWithTrustedDomain: function insertClientWithTrustedDomain() {
+        var client = DataGenerator.forKnex.createClient({slug: 'ghost-test'});
+
+        return db.knex('clients')
+            .insert(client)
+            .then(function () {
+                return db.knex('client_trusted_domains')
+                    .insert(DataGenerator.forKnex.createTrustedDomain({client_id: client.id}));
+            });
+    },
+
     insertAccessToken: function insertAccessToken(override) {
         return db.knex('accesstokens').insert(DataGenerator.forKnex.createToken(override));
     },
@@ -433,9 +445,7 @@ toDoList = {
     'posts:mu': function insertMultiAuthorPosts() { return fixtures.insertMultiAuthorPosts(); },
     tags: function insertMoreTags() { return fixtures.insertMoreTags(); },
     apps: function insertApps() { return fixtures.insertApps(); },
-    settings: function populateSettings() {
-        return models.Settings.populateDefaults().then(function () { return SettingsAPI.updateSettingsCache(); });
-    },
+    settings: function populateSettings() { return SettingsLib.init(); },
     'users:roles': function createUsersWithRoles() { return fixtures.createUsersWithRoles(); },
     'users:no-owner': function createUsersWithoutOwner() { return fixtures.createUsersWithoutOwner(); },
     users: function createExtraUsers() { return fixtures.createExtraUsers(); },
@@ -448,8 +458,10 @@ toDoList = {
         return function permissionsForObj() { return fixtures.permissionsFor(obj); };
     },
     clients: function insertClients() { return fixtures.insertClients(); },
+    'client:trusted-domain': function insertClients() { return fixtures.insertClientWithTrustedDomain(); },
     filter: function createFilterParamFixtures() { return filterData(DataGenerator); },
-    invites: function insertInvites() { return fixtures.insertInvites(); }
+    invites: function insertInvites() { return fixtures.insertInvites(); },
+    themes: function loadThemes() { return themes.loadAll(); }
 };
 
 /**
@@ -463,10 +475,6 @@ toDoList = {
   *  * `perms:obj` - initialise permissions for a particular object type
   *  * `users:roles` - create a full suite of users, one per role
  * @param {Object} toDos
- *
- * @TODO:
- *  - key: migrations-kate
- *  - call migration-runner
  */
 getFixtureOps = function getFixtureOps(toDos) {
     // default = default fixtures, if it isn't present, init with tables only

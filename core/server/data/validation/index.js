@@ -5,16 +5,11 @@ var schema    = require('../schema').tables,
     assert    = require('assert'),
     Promise   = require('bluebird'),
     errors    = require('../../errors'),
-    config    = require('../../config'),
-    readThemes  = require('../../utils/read-themes'),
-    i18n        = require('../../i18n'),
+    i18n      = require('../../i18n'),
 
     validateSchema,
     validateSettings,
-    validateActiveTheme,
-    validate,
-
-    availableThemes;
+    validate;
 
 function assertString(input) {
     assert(typeof input === 'string', 'Validator js validates strings only');
@@ -130,27 +125,6 @@ validateSettings = function validateSettings(defaultSettings, model) {
     return Promise.resolve();
 };
 
-validateActiveTheme = function validateActiveTheme(themeName) {
-    // If Ghost is running and its availableThemes collection exists
-    // give it priority.
-    if (config.get('paths').availableThemes && Object.keys(config.get('paths').availableThemes).length > 0) {
-        availableThemes = Promise.resolve(config.get('paths').availableThemes);
-    }
-
-    if (!availableThemes) {
-        // A Promise that will resolve to an object with a property for each installed theme.
-        // This is necessary because certain configuration data is only available while Ghost
-        // is running and at times the validations are used when it's not (e.g. tests)
-        availableThemes = readThemes(config.getContentPath('themes'));
-    }
-
-    return availableThemes.then(function then(themes) {
-        if (!themes.hasOwnProperty(themeName)) {
-            return Promise.reject(new errors.ValidationError({message: i18n.t('notices.data.validation.index.themeCannotBeActivated', {themeName: themeName}), context: 'activeTheme'}));
-        }
-    });
-};
-
 // Validate default settings using the validator module.
 // Each validation's key is a method name and its value is an array of options
 //
@@ -201,6 +175,5 @@ module.exports = {
     validate: validate,
     validator: validator,
     validateSchema: validateSchema,
-    validateSettings: validateSettings,
-    validateActiveTheme: validateActiveTheme
+    validateSettings: validateSettings
 };

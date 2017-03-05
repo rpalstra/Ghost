@@ -3,6 +3,7 @@ var should   = require('should'),
     Promise  = require('bluebird'),
     // Stuff we are testing
     api      = require('../../../../server/api'),
+    settingsCache = require('../../../../server/settings/cache'),
     fetchData = require('../../../../server/controllers/frontend/fetch-data'),
     configUtils = require('../../../utils/configUtils'),
     sandbox = sinon.sandbox.create();
@@ -15,6 +16,7 @@ describe('fetchData', function () {
     beforeEach(function () {
         apiPostsStub = sandbox.stub(api.posts, 'browse')
             .returns(new Promise.resolve({posts: [], meta: {pagination: {}}}));
+
         apiTagStub = sandbox.stub(api.tags, 'read').returns(new Promise.resolve({tags: []}));
         apiUserStub = sandbox.stub(api.users, 'read').returns(new Promise.resolve({users: []}));
     });
@@ -26,7 +28,7 @@ describe('fetchData', function () {
 
     describe('channel config', function () {
         beforeEach(function () {
-            configUtils.set({theme: {postsPerPage: 10}});
+            sandbox.stub(settingsCache, 'get').returns(10);
         });
 
         it('should handle no post options', function (done) {
@@ -66,7 +68,10 @@ describe('fetchData', function () {
                     featured: {
                         type: 'browse',
                         resource: 'posts',
-                        options: {filter: 'featured:true', limit: 3}
+                        options: {
+                            filter: 'featured:true',
+                            limit: 3
+                        }
                     }
                 }
             };
@@ -89,7 +94,9 @@ describe('fetchData', function () {
 
         it('should handle multiple queries with page param', function (done) {
             var channelOpts = {
-                postOptions: {page: 2},
+                postOptions: {
+                    page: 2
+                },
                 data: {
                     featured: {
                         type: 'browse',
@@ -148,7 +155,7 @@ describe('fetchData', function () {
 
     describe('valid postsPerPage', function () {
         beforeEach(function () {
-            configUtils.set({theme: {postsPerPage: 10}});
+            sandbox.stub(settingsCache, 'get').returns(10);
         });
 
         it('Adds limit & includes to options by default', function (done) {
@@ -164,7 +171,7 @@ describe('fetchData', function () {
 
     describe('invalid postsPerPage', function () {
         beforeEach(function () {
-            configUtils.set({theme: {postsPerPage: '-1'}});
+            sandbox.stub(settingsCache, 'get').returns(-1);
         });
 
         it('Will not add limit if postsPerPage is not valid', function (done) {

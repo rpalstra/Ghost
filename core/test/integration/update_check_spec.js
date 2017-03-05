@@ -1,25 +1,25 @@
 var _           = require('lodash'),
-    testUtils   = require('../utils'),
     should      = require('should'),
     rewire      = require('rewire'),
-    uuid        = require('node-uuid'),
-
-    // Stuff we are testing
+    uuid        = require('uuid'),
+    testUtils   = require('../utils'),
+    configUtils      = require('../utils/configUtils'),
     packageInfo      = require('../../../package'),
     updateCheck      = rewire('../../server/update-check'),
     NotificationsAPI = require('../../server/api/notifications');
 
 describe('Update Check', function () {
-    describe('Reporting to UpdateCheck', function () {
-        var environmentsOrig;
+    after(function () {
+        return NotificationsAPI.destroyAll(testUtils.context.internal);
+    });
 
+    describe('Reporting to UpdateCheck', function () {
         before(function () {
-            environmentsOrig = updateCheck.__get__('allowedCheckEnvironments');
-            updateCheck.__set__('allowedCheckEnvironments', ['development', 'production', 'testing']);
+            configUtils.set('privacy:useUpdateCheck', true);
         });
 
         after(function () {
-            updateCheck.__set__('allowedCheckEnvironments', environmentsOrig);
+            configUtils.restore();
         });
 
         beforeEach(testUtils.setup('owner', 'posts', 'perms:setting', 'perms:user', 'perms:init'));
@@ -44,6 +44,7 @@ describe('Update Check', function () {
                 data.post_count.should.be.above(0);
                 data.npm_version.should.be.a.String();
                 data.npm_version.should.not.be.empty();
+                data.lts.should.eql(false);
 
                 done();
             }).catch(done);

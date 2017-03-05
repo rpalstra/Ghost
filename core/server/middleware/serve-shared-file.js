@@ -27,8 +27,8 @@ function serveSharedFile(file, type, maxAge) {
                     }
 
                     if (type === 'text/xsl' || type === 'text/plain' || type === 'application/javascript') {
-                        buf = buf.toString().replace(blogRegex, config.get('url').replace(/\/$/, ''));
-                        buf = buf.toString().replace(apiRegex, utils.url.apiUrl({cors: true}));
+                        buf = buf.toString().replace(blogRegex, utils.url.urlFor('home', true).replace(/\/$/, ''));
+                        buf = buf.toString().replace(apiRegex, utils.url.urlFor('api', {cors: true}, true));
                     }
                     content = {
                         headers: {

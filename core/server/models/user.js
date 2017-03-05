@@ -11,6 +11,7 @@ var _              = require('lodash'),
     validation     = require('../data/validation'),
     events         = require('../events'),
     i18n           = require('../i18n'),
+    pipeline       = require('../utils/pipeline'),
 
     bcryptGenSalt  = Promise.promisify(bcrypt.genSalt),
     bcryptHash     = Promise.promisify(bcrypt.hash),
@@ -348,12 +349,15 @@ User = ghostBookshelf.Model.extend({
 
     /**
      * ### Edit
+     *
+     * Note: In case of login the last_login attribute gets updated.
+     *
      * @extends ghostBookshelf.Model.edit to handle returning the full object
      * **See:** [ghostBookshelf.Model.edit](base.js.html#edit)
      */
     edit: function edit(data, options) {
         var self = this,
-            roleId;
+            ops = [];
 
         if (data.roles && data.roles.length > 1) {
             return Promise.reject(
@@ -364,33 +368,49 @@ User = ghostBookshelf.Model.extend({
         options = options || {};
         options.withRelated = _.union(options.withRelated, options.include);
 
-        return ghostBookshelf.Model.edit.call(this, data, options).then(function then(user) {
-            if (!data.roles) {
-                return user;
-            }
+        if (data.email) {
+            ops.push(function checkForDuplicateEmail() {
+                return self.getByEmail(data.email, options).then(function then(user) {
+                    if (user && user.id !== options.id) {
+                        return Promise.reject(new errors.ValidationError({message: i18n.t('errors.models.user.userUpdateError.emailIsAlreadyInUse')}));
+                    }
+                });
+            });
+        }
 
-            roleId = data.roles[0].id || data.roles[0];
+        ops.push(function update() {
+            return ghostBookshelf.Model.edit.call(self, data, options).then(function then(user) {
+                var roleId;
 
-            return user.roles().fetch().then(function then(roles) {
-                // return if the role is already assigned
-                if (roles.models[0].id === roleId) {
-                    return;
+                if (!data.roles) {
+                    return user;
                 }
-                return ghostBookshelf.model('Role').findOne({id: roleId});
-            }).then(function then(roleToAssign) {
-                if (roleToAssign && roleToAssign.get('name') === 'Owner') {
-                    return Promise.reject(
-                        new errors.ValidationError({message: i18n.t('errors.models.user.methodDoesNotSupportOwnerRole')})
-                    );
-                } else {
-                    // assign all other roles
-                    return user.roles().updatePivot({role_id: roleId});
-                }
-            }).then(function then() {
-                options.status = 'all';
-                return self.findOne({id: user.id}, options);
+
+                roleId = data.roles[0].id || data.roles[0];
+
+                return user.roles().fetch().then(function then(roles) {
+                    // return if the role is already assigned
+                    if (roles.models[0].id === roleId) {
+                        return;
+                    }
+                    return ghostBookshelf.model('Role').findOne({id: roleId});
+                }).then(function then(roleToAssign) {
+                    if (roleToAssign && roleToAssign.get('name') === 'Owner') {
+                        return Promise.reject(
+                            new errors.ValidationError({message: i18n.t('errors.models.user.methodDoesNotSupportOwnerRole')})
+                        );
+                    } else {
+                        // assign all other roles
+                        return user.roles().updatePivot({role_id: roleId});
+                    }
+                }).then(function then() {
+                    options.status = 'all';
+                    return self.findOne({id: user.id}, options);
+                });
             });
         });
+
+        return pipeline(ops);
     },
 
     /**
@@ -467,6 +487,19 @@ User = ghostBookshelf.Model.extend({
         return self.edit.call(self, userData, options);
     },
 
+    /**
+     * Right now the setup of the blog depends on the user status.
+     * @TODO: see https://github.com/TryGhost/Ghost/issues/8003
+     */
+    isSetup: function isSetup() {
+        return this
+            .where('status', 'in', activeStates)
+            .count('id')
+            .then(function (count) {
+                return !!count;
+            });
+    },
+
     permissible: function permissible(userModelOrId, action, context, loadedPermissions, hasUserPermission, hasAppPermission) {
         var self = this,
             userModel = userModelOrId,
@@ -491,7 +524,7 @@ User = ghostBookshelf.Model.extend({
         }
 
         if (action === 'edit') {
-            // Owner can only be editted by owner
+            // Owner can only be edited by owner
             if (loadedPermissions.user && userModel.hasRole('Owner')) {
                 hasUserPermission = _.some(loadedPermissions.user.roles, {name: 'Owner'});
             }

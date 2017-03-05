@@ -17,65 +17,30 @@ The project is maintained by a non-profit organisation called the **Ghost Founda
 
 &nbsp;
 
-# Quick Start Install
+# Ghost 1.0-alpha Developer Install
 
-First, you’ll need **Node.js v4 LTS** or a [supported version](http://support.ghost.org/supported-node-versions/).
+**Please note:** These are the install instructions for Ghost 1.0-alpha, which is **not** stable. If you're looking for the latest release of Ghost, check out the [stable branch](https://github.com/TryGhost/Ghost/tree/stable) or the [latest release](https://github.com/TryGhost/Ghost/releases).
 
-1. Download the [latest release](https://ghost.org/developers/) of Ghost
-1. Unzip, and fire up terminal
-1. `npm install --production`
-1. Start Ghost!
-    - Local environment: `npm start`
-    - On a server: `npm start --production`
-1. `http://localhost:2368/ghost` :tada:
-
-More [install docs](http://support.ghost.org/installation/) here in case you get stuck.
-
-&nbsp;
-
-<a name="getting-started"></a>
-# Developer Install
-
-This is for if you want to hack on Ghost core. First, you’ll need **Node.js v4 LTS** or a [supported version](http://support.ghost.org/supported-node-versions/). Then:
+If you get stuck, come say hi over [on slack](https://slack.ghost.org)!
 
 ```bash
-git clone git://github.com/tryghost/ghost.git
-cd ghost
-```
-
-Install grunt
-
-```bash
-npm install -g grunt-cli
-```
-
-Install knex-migrator
-
-```bash
-npm install -g knex-migrator
-```
-
-Install Ghost
-
-```bash
+git clone [Ghost's repo URL or your Ghost Fork's URL]
+npm install -g knex-migrator gulp
 npm install
+git submodule update --init
+cd core/client
+npm install
+bower install
+cd ../..
+gulp setup
+knex-migrator init
+gulp dev
 ```
 
-Build the things!
-
+To run tests
 ```bash
-grunt init
+ember test
 ```
-
-Start your engines
-
-```bash
-grunt dev
-```
-
-Congrats! You made it. BTW you can also just `npm install ghost` if you're into that sort of thing. NPM aficionados can also read up on using [Ghost as an NPM module](https://github.com/TryGhost/Ghost/wiki/Using-Ghost-as-an-npm-module). More general [install docs](http://support.ghost.org/installation/) here in case you got stuck.
-
-&nbsp;
 
 
 # Deploying Ghost
@@ -104,4 +69,4 @@ New releases are announced on the [dev blog](http://dev.ghost.org/tag/releases/)
 
 # Copyright & License
 
-Copyright (c) 2013-2016 Ghost Foundation - Released under the [MIT license](LICENSE).
+Copyright (c) 2013-2017 Ghost Foundation - Released under the [MIT license](LICENSE).
