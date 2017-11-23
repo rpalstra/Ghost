@@ -1,11 +1,11 @@
 // # Roles API
 // RESTful API for the Role resource
-var Promise         = require('bluebird'),
-    canThis         = require('../permissions').canThis,
-    dataProvider    = require('../models'),
-    pipeline        = require('../utils/pipeline'),
-    utils           = require('./utils'),
-    docName         = 'roles',
+var Promise = require('bluebird'),
+    pipeline = require('../utils/pipeline'),
+    apiUtils = require('./utils'),
+    canThis = require('../permissions').canThis,
+    models = require('../models'),
+    docName = 'roles',
 
     roles;
 
@@ -39,36 +39,39 @@ roles = {
          * @returns {Object} options
          */
         function modelQuery(options) {
-            return dataProvider.Role.findAll(options);
+            return models.Role.findAll(options)
+                .then(function onModelResponse(models) {
+                    var roles = models.map(function (role) {
+                        return role.toJSON();
+                    });
+
+                    if (options.permissions !== 'assign') {
+                        return {roles: roles};
+                    }
+
+                    return Promise.filter(roles.map(function (role) {
+                        return canThis(options.context).assign.role(role)
+                            .return(role)
+                            .catch(function () {});
+                    }), function (value) {
+                        return value && value.name !== 'Owner';
+                    }).then(function (roles) {
+                        return {
+                            roles: roles
+                        };
+                    });
+                });
         }
 
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
-            utils.validate(docName, {opts: permittedOptions}),
-            utils.handlePermissions(docName, 'browse'),
+            apiUtils.validate(docName, {opts: permittedOptions}),
+            apiUtils.handlePermissions(docName, 'browse'),
             modelQuery
         ];
 
         // Pipeline calls each task passing the result of one to be the arguments for the next
-        return pipeline(tasks, options).then(function formatResponse(results) {
-            var roles = results.map(function (r) {
-                return r.toJSON();
-            });
-
-            if (options.permissions !== 'assign') {
-                return {roles: roles};
-            }
-
-            return Promise.filter(roles.map(function (role) {
-                return canThis(options.context).assign.role(role)
-                    .return(role)
-                    .catch(function () {});
-            }), function (value) {
-                return value && value.name !== 'Owner';
-            }).then(function (roles) {
-                return {roles: roles};
-            });
-        });
+        return pipeline(tasks, options);
     }
 };
 

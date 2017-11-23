@@ -4,40 +4,53 @@
 // Ghost's JSON API is integral to the workings of Ghost, regardless of whether you want to access data internally,
 // from a theme, an app, or from an external app, you'll use the Ghost JSON API to do so.
 
-var _              = require('lodash'),
-    Promise        = require('bluebird'),
-    config         = require('../config'),
-    models         = require('../models'),
-    utils          = require('../utils'),
-    configuration  = require('./configuration'),
-    db             = require('./db'),
-    mail           = require('./mail'),
-    notifications  = require('./notifications'),
-    posts          = require('./posts'),
-    schedules      = require('./schedules'),
-    roles          = require('./roles'),
-    settings       = require('./settings'),
-    tags           = require('./tags'),
-    invites        = require('./invites'),
-    clients        = require('./clients'),
-    users          = require('./users'),
-    slugs          = require('./slugs'),
-    themes         = require('./themes'),
-    subscribers    = require('./subscribers'),
+var _ = require('lodash'),
+    Promise = require('bluebird'),
+    config = require('../config'),
+    models = require('../models'),
+    utils = require('../utils'),
+    configuration = require('./configuration'),
+    db = require('./db'),
+    mail = require('./mail'),
+    notifications = require('./notifications'),
+    posts = require('./posts'),
+    schedules = require('./schedules'),
+    roles = require('./roles'),
+    settings = require('./settings'),
+    tags = require('./tags'),
+    invites = require('./invites'),
+    redirects = require('./redirects'),
+    clients = require('./clients'),
+    users = require('./users'),
+    slugs = require('./slugs'),
+    themes = require('./themes'),
+    subscribers = require('./subscribers'),
     authentication = require('./authentication'),
-    uploads        = require('./upload'),
-    exporter       = require('../data/export'),
-    slack          = require('./slack'),
+    uploads = require('./upload'),
+    exporter = require('../data/export'),
+    slack = require('./slack'),
+    webhooks = require('./webhooks'),
 
     http,
     addHeaders,
     cacheInvalidationHeader,
     locationHeader,
     contentDispositionHeaderExport,
-    contentDispositionHeaderSubscribers;
+    contentDispositionHeaderSubscribers,
+    contentDispositionHeaderRedirects;
 
-function isActiveThemeOverride(method, endpoint, result) {
-    return method === 'POST' && endpoint === 'themes' && result.themes && result.themes[0] && result.themes[0].active === true;
+function isActiveThemeUpdate(method, endpoint, result) {
+    if (endpoint === 'themes') {
+        if (method === 'PUT') {
+            return true;
+        }
+
+        if (method === 'POST' && result.themes && result.themes[0] && result.themes[0].active === true) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -64,17 +77,14 @@ cacheInvalidationHeader = function cacheInvalidationHeader(req, result) {
         hasStatusChanged,
         wasPublishedUpdated;
 
-    if (isActiveThemeOverride(method, endpoint, result)) {
+    if (isActiveThemeUpdate(method, endpoint, result)) {
         // Special case for if we're overwriting an active theme
-        // @TODO: remove this crazy DIRTY HORRIBLE HACK
-        req.app.set('activeTheme', null);
-        config.set('assetHash', null);
         return INVALIDATE_ALL;
     } else if (['POST', 'PUT', 'DELETE'].indexOf(method) > -1) {
         if (endpoint === 'schedules' && subdir === 'posts') {
             return INVALIDATE_ALL;
         }
-        if (['settings', 'users', 'db', 'tags'].indexOf(endpoint) > -1) {
+        if (['settings', 'users', 'db', 'tags', 'redirects'].indexOf(endpoint) > -1) {
             return INVALIDATE_ALL;
         } else if (endpoint === 'posts') {
             if (method === 'DELETE') {
@@ -130,6 +140,9 @@ locationHeader = function locationHeader(req, result) {
         } else if (result.hasOwnProperty('tags')) {
             newObject = result.tags[0];
             location = utils.url.urlJoin(apiRoot, 'tags', newObject.id, '/');
+        } else if (result.hasOwnProperty('webhooks')) {
+            newObject = result.webhooks[0];
+            location = utils.url.urlJoin(apiRoot, 'webhooks', newObject.id, '/');
         }
     }
 
@@ -160,6 +173,10 @@ contentDispositionHeaderExport = function contentDispositionHeaderExport() {
 contentDispositionHeaderSubscribers = function contentDispositionHeaderSubscribers() {
     var datetime = (new Date()).toJSON().substring(0, 10);
     return Promise.resolve('Attachment; filename="subscribers.' + datetime + '.csv"');
+};
+
+contentDispositionHeaderRedirects = function contentDispositionHeaderRedirects() {
+    return Promise.resolve('Attachment; filename="redirects.json"');
 };
 
 addHeaders = function addHeaders(apiMethod, req, res, result) {
@@ -199,6 +216,18 @@ addHeaders = function addHeaders(apiMethod, req, res, result) {
                 res.set({
                     'Content-Disposition': header,
                     'Content-Type': 'text/csv'
+                });
+            });
+    }
+
+    // Add Redirects Content-Disposition Header
+    if (apiMethod === redirects.download) {
+        contentDisposition = contentDispositionHeaderRedirects()
+            .then(function contentDispositionHeaderRedirects(header) {
+                res.set({
+                    'Content-Disposition': header,
+                    'Content-Type': 'application/json',
+                    'Content-Length': JSON.stringify(result).length
                 });
             });
     }
@@ -286,7 +315,9 @@ module.exports = {
     uploads: uploads,
     slack: slack,
     themes: themes,
-    invites: invites
+    invites: invites,
+    redirects: redirects,
+    webhooks: webhooks
 };
 
 /**

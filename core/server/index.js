@@ -13,25 +13,26 @@
 require('./overrides');
 
 // Module dependencies
-var debug = require('debug')('ghost:boot:init'),
-// Config should be first require, as it triggers the initial load of the config files
+var debug = require('ghost-ignition').debug('boot:init'),
     config = require('./config'),
     Promise = require('bluebird'),
-    logging = require('./logging'),
     i18n = require('./i18n'),
     models = require('./models'),
     permissions = require('./permissions'),
-    apps = require('./apps'),
     auth = require('./auth'),
     dbHealth = require('./data/db/health'),
-    xmlrpc = require('./data/xml/xmlrpc'),
-    slack = require('./data/slack'),
     GhostServer = require('./ghost-server'),
-    scheduling = require('./scheduling'),
+    scheduling = require('./adapters/scheduling'),
     settings = require('./settings'),
-    settingsCache = require('./settings/cache'),
     themes = require('./themes'),
-    utils = require('./utils');
+    utils = require('./utils'),
+
+    // Services that need initialisation
+    urlService = require('./services/url'),
+    apps = require('./services/apps'),
+    xmlrpc = require('./services/xmlrpc'),
+    slack = require('./services/slack'),
+    webhooks = require('./services/webhooks');
 
 // ## Initialise Ghost
 function init() {
@@ -63,7 +64,11 @@ function init() {
             // Initialize xmrpc ping
             xmlrpc.listen(),
             // Initialize slack ping
-            slack.listen()
+            slack.listen(),
+            // Initialize webhook pings
+            webhooks.listen(),
+            // Url Service
+            urlService.init()
         );
     }).then(function () {
         debug('Apps, XMLRPC, Slack done');
@@ -71,27 +76,16 @@ function init() {
         // Setup our collection of express apps
         parentApp = require('./app')();
 
+        // Initialise analytics events
+        if (config.get('segment:key')) {
+            require('./analytics-events').init();
+        }
+
         debug('Express Apps done');
     }).then(function () {
-        return auth.validation.switch({
-            authType: config.get('auth:type')
-        });
-    }).then(function () {
-        // runs asynchronous
-        auth.init({
-            authType: config.get('auth:type'),
-            ghostAuthUrl: config.get('auth:url'),
-            redirectUri: utils.url.urlFor('admin', true),
-            clientUri: utils.url.urlFor('home', true),
-            clientName: settingsCache.get('title'),
-            clientDescription: settingsCache.get('description')
-        }).then(function (response) {
-            parentApp.use(response.auth);
-        }).catch(function onAuthError(err) {
-            logging.error(err);
-        });
-    }).then(function () {
+        parentApp.use(auth.init());
         debug('Auth done');
+
         return new GhostServer(parentApp);
     }).then(function (_ghostServer) {
         ghostServer = _ghostServer;

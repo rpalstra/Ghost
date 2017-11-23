@@ -11,8 +11,7 @@ JSONHandler = {
     contentTypes: ['application/octet-stream', 'application/json'],
     directories: [],
 
-    loadFile: function (files, startDir) {
-        /*jshint unused:false */
+    loadFile: function (files, startDir) { // eslint-disable-line no-unused-vars
         // @TODO: Handle multiple JSON files
         var filePath = files[0].path;
 
@@ -24,7 +23,9 @@ JSONHandler = {
                 // if importData follows JSON-API format `{ db: [exportedData] }`
                 if (_.keys(importData).length === 1) {
                     if (!importData.db || !Array.isArray(importData.db)) {
-                        throw new errors.GhostError({message: i18n.t('errors.data.importer.handlers.json.invalidJsonFormat')});
+                        throw new errors.GhostError({
+                            message: i18n.t('errors.data.importer.handlers.json.invalidJsonFormat')
+                        });
                     }
 
                     importData = importData.db[0];
@@ -34,7 +35,7 @@ JSONHandler = {
             } catch (err) {
                 return Promise.reject(new errors.BadRequestError({
                     err: err,
-                    context: i18n.t('errors.data.importer.handlers.json.apiDbImportContent'),
+                    message: err.message,
                     help: i18n.t('errors.data.importer.handlers.json.checkImportJsonIsValid')
                 }));
             }

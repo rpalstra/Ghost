@@ -1,11 +1,10 @@
-var testUtils   = require('../../utils'),
-    should      = require('should'),
-    Promise     = require('bluebird'),
-    _           = require('lodash'),
+var should = require('should'),
+    testUtils = require('../../utils'),
+    _ = require('lodash'),
     // Stuff we are testing
-    context     = testUtils.context,
+    context = testUtils.context,
 
-    TagAPI      = require('../../../server/api/tags');
+    TagAPI = require('../../../server/api/tags');
 
 // there are some random generated tags in test database
 // which can't be sorted easily using _.sortBy()
@@ -28,7 +27,6 @@ describe('Tags API', function () {
 
         beforeEach(function () {
             newTag = _.clone(_.omit(testUtils.DataGenerator.forKnex.createTag(testUtils.DataGenerator.Content.tags[0]), 'id'));
-            Promise.resolve(newTag);
         });
 
         it('can add a tag (admin)', function (done) {
@@ -47,6 +45,21 @@ describe('Tags API', function () {
                     should.exist(results);
                     should.exist(results.tags);
                     results.tags.length.should.be.above(0);
+                    results.tags[0].visibility.should.eql('public');
+                    done();
+                }).catch(done);
+        });
+
+        it('add internal tag', function (done) {
+            TagAPI
+                .add({tags: [{name: '#test'}]}, testUtils.context.editor)
+                .then(function (results) {
+                    should.exist(results);
+                    should.exist(results.tags);
+                    results.tags.length.should.be.above(0);
+                    results.tags[0].visibility.should.eql('internal');
+                    results.tags[0].name.should.eql('#test');
+                    results.tags[0].slug.should.eql('hash-test');
                     done();
                 }).catch(done);
         });
@@ -68,9 +81,9 @@ describe('Tags API', function () {
                 .then(function () {
                     done(new Error('Adding a tag with an invalid name is not rejected.'));
                 }).catch(function (errors) {
-                    errors.should.have.enumerable(0).with.property('errorType', 'ValidationError');
-                    done();
-                }).catch(done);
+                errors.should.have.enumerable(0).with.property('errorType', 'ValidationError');
+                done();
+            }).catch(done);
         });
     });
 
@@ -100,11 +113,11 @@ describe('Tags API', function () {
 
         it('No-auth CANNOT edit tag', function (done) {
             TagAPI.edit({tags: [{name: newTagName}]}, _.extend({}, {id: firstTag}))
-            .then(function () {
-                done(new Error('Add tag is not denied without authentication.'));
-            }, function () {
-                done();
-            }).catch(done);
+                .then(function () {
+                    done(new Error('Add tag is not denied without authentication.'));
+                }, function () {
+                    done();
+                }).catch(done);
         });
 
         it('rejects invalid names with ValidationError', function (done) {
@@ -114,9 +127,9 @@ describe('Tags API', function () {
                 .then(function () {
                     done(new Error('Adding a tag with an invalid name is not rejected.'));
                 }).catch(function (errors) {
-                    errors.should.have.enumerable(0).with.property('errorType', 'ValidationError');
-                    done();
-                }).catch(done);
+                errors.should.have.enumerable(0).with.property('errorType', 'ValidationError');
+                done();
+            }).catch(done);
         });
     });
 

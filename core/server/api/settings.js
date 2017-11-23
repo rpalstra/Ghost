@@ -1,21 +1,18 @@
 // # Settings API
 // RESTful API for the Setting resource
-var _            = require('lodash'),
-    dataProvider = require('../models'),
-    Promise      = require('bluebird'),
-    canThis      = require('../permissions').canThis,
-    errors       = require('../errors'),
-    utils        = require('./utils'),
-    i18n         = require('../i18n'),
-
-    docName      = 'settings',
-    settings,
-
+var Promise = require('bluebird'),
+    _ = require('lodash'),
+    models = require('../models'),
+    canThis = require('../permissions').canThis,
+    apiUtils = require('./utils'),
+    errors = require('../errors'),
+    i18n = require('../i18n'),
     settingsCache = require('../settings/cache'),
-
+    docName = 'settings',
+    settings,
     settingsFilter,
     settingsResult,
-    canEditAllSettings,
+    canEditAllSettings;
 
 // ## Helpers
 
@@ -43,7 +40,7 @@ settingsFilter = function (settings, filter) {
  *
  * Takes a keyed JSON object
  * E.g.
- * dbHash: {
+ * db_hash: {
  *   id: '123abc',
  *   key: 'dbash',
  *   value: 'xxxx',
@@ -101,6 +98,15 @@ canEditAllSettings = function (settingsInfo, options) {
                 return Promise.reject(new errors.NotFoundError(
                     {message: i18n.t('errors.api.settings.problemFindingSetting', {key: settingInfo.key})}
                 ));
+            }
+
+            if (setting.key === 'active_theme') {
+                return Promise.reject(
+                    new errors.BadRequestError({
+                        message: i18n.t('errors.api.settings.activeThemeSetViaAPI.error'),
+                        help: i18n.t('errors.api.settings.activeThemeSetViaAPI.help')
+                    })
+                );
             }
 
             return checkSettingPermissions(setting);
@@ -214,9 +220,9 @@ settings = {
         });
 
         return canEditAllSettings(object.settings, options).then(function () {
-            return utils.checkObject(object, docName).then(function (checkedData) {
+            return apiUtils.checkObject(object, docName).then(function (checkedData) {
                 options.user = self.user;
-                return dataProvider.Settings.edit(checkedData.settings, options);
+                return models.Settings.edit(checkedData.settings, options);
             }).then(function (settingsModelsArray) {
                 // Instead of a standard bookshelf collection, Settings.edit returns an array of Settings Models.
                 // We convert this to JSON, by calling toJSON on each Model (using invokeMap for ease)

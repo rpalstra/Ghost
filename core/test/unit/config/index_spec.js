@@ -1,12 +1,10 @@
-// jscs:disable requireDotNotation
-
-var should = require('should'),
+var should = require('should'), // jshint ignore:line
     path = require('path'),
     rewire = require('rewire'),
     _ = require('lodash'),
     configUtils = require('../../utils/configUtils');
 
-should.equal(true, true);
+// jscs:disable requireDotNotation
 
 describe('Config', function () {
     before(function () {
@@ -24,6 +22,10 @@ describe('Config', function () {
             originalEnv = _.clone(process.env);
             originalArgv = _.clone(process.argv);
             config = rewire('../../../server/config');
+
+            // we manually call `loadConf` in the tests and we need to ensure that the minimum
+            // required config properties are available
+            process.env['paths__contentPath'] = 'content/';
         });
 
         afterEach(function () {
@@ -118,12 +120,9 @@ describe('Config', function () {
 
     describe('Storage', function () {
         it('should default to local-file-store', function () {
-            configUtils.config.get('paths').should.have.property('internalStoragePath', path.join(configUtils.config.get('paths').corePath, '/server/storage/'));
+            configUtils.config.get('paths').should.have.property('internalStoragePath', path.join(configUtils.config.get('paths').corePath, '/server/adapters/storage/'));
 
-            configUtils.config.get('storage').should.have.property('active', {
-                images: 'local-file-store',
-                themes: 'local-file-store'
-            });
+            configUtils.config.get('storage').should.have.property('active', 'LocalFileStorage');
         });
 
         it('no effect: setting a custom active storage as string', function () {

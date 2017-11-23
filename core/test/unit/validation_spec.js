@@ -1,4 +1,4 @@
-var should  = require('should'),
+var should = require('should'),
 
     validation = require('../../server/data/validation');
 
@@ -12,6 +12,7 @@ describe('Validation', function () {
         );
 
         validation.validate.should.be.a.Function();
+        validation.validatePassword.should.be.a.Function();
         validation.validateSchema.should.be.a.Function();
         validation.validateSettings.should.be.a.Function();
 

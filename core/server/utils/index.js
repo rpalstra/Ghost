@@ -1,5 +1,7 @@
 var unidecode  = require('unidecode'),
     _          = require('lodash'),
+    errors = require('../errors'),
+    i18n = require('../i18n'),
     utils,
     getRandomInt;
 
@@ -19,6 +21,7 @@ utils = {
     /**
      * Timespans in seconds and milliseconds for better readability
      */
+    /* eslint-disable key-spacing */
     ONE_HOUR_S:          3600,
     ONE_DAY_S:          86400,
     ONE_MONTH_S:      2628000,
@@ -31,6 +34,7 @@ utils = {
     ONE_MONTH_MS:  2628000000,
     SIX_MONTH_MS: 15768000000,
     ONE_YEAR_MS:  31536000000,
+    // eslint-enable key-spacing */
 
     /**
      * Return a unique identifier with the given `len`.
@@ -54,8 +58,13 @@ utils = {
 
         return buf.join('');
     },
+
     safeString: function (string, options) {
         options = options || {};
+
+        if (string === null) {
+            string = '';
+        }
 
         // Handle the £ symbol separately, since it needs to be removed before the unicode conversion.
         string = string.replace(/£/g, '-');
@@ -85,11 +94,13 @@ utils = {
 
         return string;
     },
+
     // The token is encoded URL safe by replacing '+' with '-', '\' with '_' and removing '='
     // NOTE: the token is not encoded using valid base64 anymore
     encodeBase64URLsafe: function (base64String) {
         return base64String.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     },
+
     // Decode url safe base64 encoding and add padding ('=')
     decodeBase64URLsafe: function (base64String) {
         base64String = base64String.replace(/-/g, '+').replace(/_/g, '/');
@@ -98,10 +109,27 @@ utils = {
         }
         return base64String;
     },
-    redirect301: function redirect301(res, path) {
-        /*jslint unparam:true*/
-        res.set({'Cache-Control': 'public, max-age=' + utils.ONE_YEAR_S});
-        res.redirect(301, path);
+
+    /**
+     * NOTE: No separate utils file, because redirects won't live forever in a JSON file, see V2 of https://github.com/TryGhost/Ghost/issues/7707
+     */
+    validateRedirects: function validateRedirects(redirects) {
+        if (!_.isArray(redirects)) {
+            throw new errors.ValidationError({
+                message: i18n.t('errors.utils.redirectsWrongFormat'),
+                help: 'https://docs.ghost.org/docs/redirects'
+            });
+        }
+
+        _.each(redirects, function (redirect) {
+            if (!redirect.from || !redirect.to) {
+                throw new errors.ValidationError({
+                    message: i18n.t('errors.utils.redirectsWrongFormat'),
+                    context: JSON.stringify(redirect),
+                    help: 'https://docs.ghost.org/docs/redirects'
+                });
+            }
+        });
     },
 
     readCSV: require('./read-csv'),
@@ -111,7 +139,9 @@ utils = {
     url: require('./url'),
     tokens: require('./tokens'),
     sequence: require('./sequence'),
-    ghostVersion: require('./ghost-version')
+    ghostVersion: require('./ghost-version'),
+    mobiledocConverter: require('./mobiledoc-converter'),
+    markdownConverter: require('./markdown-converter')
 };
 
 module.exports = utils;

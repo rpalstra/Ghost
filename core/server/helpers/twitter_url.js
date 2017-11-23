@@ -2,15 +2,12 @@
 // Usage: `{{twitter_url}}` or `{{twitter_url author.twitter}}`
 //
 // Output a url for a twitter username
-//
+var proxy = require('./proxy'),
+    socialUrls = proxy.socialUrls,
+    findKey = proxy.utils.findKey;
+
 // We use the name twitter_url to match the helper for consistency:
-// jscs:disable requireCamelCaseOrUpperCaseIdentifiers
-
-var socialUrls = require('../utils/social-urls'),
-    findKey    = require('./utils').findKey,
-    twitter_url;
-
-twitter_url = function twitter_url(username, options) {
+module.exports = function twitter_url(username, options) { // eslint-disable-line camelcase
     if (!options) {
         options = username;
         username = findKey('twitter', this, options.data.blog);
@@ -22,5 +19,3 @@ twitter_url = function twitter_url(username, options) {
 
     return null;
 };
-
-module.exports = twitter_url;

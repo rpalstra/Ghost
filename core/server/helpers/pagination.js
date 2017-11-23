@@ -2,14 +2,14 @@
 // `{{pagination}}`
 // Outputs previous and next buttons, along with info about the current page
 
-var _               = require('lodash'),
-    errors          = require('../errors'),
-    i18n            = require('../i18n'),
-    template        = require('./template'),
+var proxy = require('./proxy'),
+    _ = require('lodash'),
+    errors = proxy.errors,
+    i18n = proxy.i18n,
+    templates = proxy.templates,
     pagination;
 
 pagination = function (options) {
-    /*jshint unused:false*/
     if (!_.isObject(this.pagination) || _.isFunction(this.pagination)) {
         throw new errors.IncorrectUsageError({
             message: i18n.t('warnings.helpers.pagination.invalidData')
@@ -37,7 +37,7 @@ pagination = function (options) {
 
     var data = _.merge({}, this.pagination);
 
-    return template.execute('pagination', data, options);
+    return templates.execute('pagination', data, options);
 };
 
 module.exports = pagination;

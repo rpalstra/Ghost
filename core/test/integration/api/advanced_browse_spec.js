@@ -1,11 +1,11 @@
-var testUtils = require('../../utils'),
-    should    = require('should'),
-    _         = require('lodash'),
+var should = require('should'),
+    testUtils = require('../../utils'),
+    _ = require('lodash'),
 
 // Stuff we are testing
-    PostAPI   = require('../../../server/api/posts'),
-    TagAPI    = require('../../../server/api/tags'),
-    UserAPI   = require('../../../server/api/users');
+    PostAPI = require('../../../server/api/posts'),
+    TagAPI = require('../../../server/api/tags'),
+    UserAPI = require('../../../server/api/users');
 
 describe('Advanced Browse', function () {
     // Initialise the DB just once, the tests are fetch-only
@@ -20,7 +20,11 @@ describe('Advanced Browse', function () {
     describe('Advanced Use Cases', function () {
         describe('1. Posts - filter: "tags: [photo, video] + id: -4", limit: "3", include: "tags"', function () {
             it('Will fetch 3 posts with tags which match `photo` or `video` and are not the post with id 4.', function (done) {
-                PostAPI.browse({filter: 'tags: [photo, video] + id: -' + testUtils.filterData.data.posts[3].id, limit: 3, include: 'tags'}).then(function (result) {
+                PostAPI.browse({
+                    filter: 'tags: [photo, video] + id: -' + testUtils.filterData.data.posts[3].id,
+                    limit: 3,
+                    include: 'tags'
+                }).then(function (result) {
                     var ids;
                     // 1. Result should have the correct base structure
                     should.exist(result);
@@ -69,7 +73,10 @@ describe('Advanced Browse', function () {
 
         describe('2. Posts - filter: "tag:photo,featured:true,image:-null", include: "tags"', function () {
             it('Will fetch posts which have either a tag of `photo`, are marked `featured` or have an image.', function (done) {
-                PostAPI.browse({filter: 'tag:photo,featured:true,image:-null', include: 'tags'}).then(function (result) {
+                PostAPI.browse({
+                    filter: 'tag:photo,featured:true,feature_image:-null',
+                    include: 'tags'
+                }).then(function (result) {
                     var ids;
 
                     // 1. Result should have the correct base structure
@@ -119,7 +126,12 @@ describe('Advanced Browse', function () {
         describe.skip('3. Tags - filter="count.posts:>=1" order="count.posts DESC" limit="all"', function () {
             // @TODO add support for counts/aggregates in order & filter params
             it('Will fetch all tags, ordered by post count, where the post count is at least 1.', function (done) {
-                TagAPI.browse({filter: 'count.posts:>=1', order: 'count.posts DESC', limit: 'all', include: 'count.posts'}).then(function (result) {
+                TagAPI.browse({
+                    filter: 'count.posts:>=1',
+                    order: 'count.posts DESC',
+                    limit: 'all',
+                    include: 'count.posts'
+                }).then(function (result) {
                     // 1. Result should have the correct base structure
                     should.exist(result);
                     result.should.have.property('tags');
@@ -142,10 +154,13 @@ describe('Advanced Browse', function () {
             });
         });
 
-        describe('4. Posts - filter="author:[leslie,pat]+(tag:audio,image:-null)"', function () {
+        describe('4. Posts - filter="author:[leslie,pat]+(tag:hash-audio,image:-null)"', function () {
             // Note that `pat` doesn't exist (it's `pat-smith`)
-            it('Will fetch posts by the author `leslie` or `pat` which are either have tag `audio` or an image.', function (done) {
-                PostAPI.browse({filter: 'author:[leslie,pat]+(tag:audio,image:-null)', include: 'author,tags'}).then(function (result) {
+            it('Will fetch posts by the author `leslie` or `pat` which are either have tag `hash-audio` or an image.', function (done) {
+                PostAPI.browse({
+                    filter: 'author:[leslie,pat]+(tag:hash-audio,feature_image:-null)',
+                    include: 'author,tags'
+                }).then(function (result) {
                     var ids, authors;
                     // 1. Result should have the correct base structure
                     should.exist(result);
@@ -162,15 +177,15 @@ describe('Advanced Browse', function () {
                     });
                     authors.should.matchAny(/leslie|pat/);
 
-                    // Each post must either be featured or have the tag 'audio'
+                    // Each post must either be featured or have the tag 'hash-audio'
                     _.each(result.posts, function (post) {
                         var tags = _.map(post.tags, 'slug');
                         // This construct ensures we get an assertion or a failure
-                        if (!_.isEmpty(post.image)) {
-                            post.image.should.not.be.empty();
+                        if (!_.isEmpty(post.feature_image)) {
+                            post.feature_image.should.not.be.empty();
                         } else {
                             tags = _.map(post.tags, 'slug');
-                            tags.should.containEql('audio');
+                            tags.should.containEql('hash-audio');
                         }
                     });
 
@@ -202,7 +217,11 @@ describe('Advanced Browse', function () {
         describe.skip('5. Users - filter="posts.tags:photo" order="count.posts DESC" limit="3"', function () {
             // @TODO: add support for joining through posts and tags for users
             it('Will fetch the 3 most prolific users who write posts with the tag `photo` ordered by most posts.', function (done) {
-                UserAPI.browse({filter: 'posts.tags:special', order: 'count.posts DESC', limit: 3}).then(function (result) {
+                UserAPI.browse({
+                    filter: 'posts.tags:special',
+                    order: 'count.posts DESC',
+                    limit: 3
+                }).then(function (result) {
                     var ids;
                     // 1. Result should have the correct base structure
                     should.exist(result);
@@ -240,7 +259,11 @@ describe('Advanced Browse', function () {
 
         describe.skip('6. Posts filter="published_at:>\'2015-07-20\'" limit="5"}}', function () {
             it('Will fetch 5 posts after a given date.', function (done) {
-                PostAPI.browse({filter: 'published_at:>\'2015-07-20\'', limit: 5, include: 'tags'}).then(function (result) {
+                PostAPI.browse({
+                    filter: 'published_at:>\'2015-07-20\'',
+                    limit: 5,
+                    include: 'tags'
+                }).then(function (result) {
                     // 1. Result should have the correct base structure
                     should.exist(result);
                     result.should.have.property('posts');
@@ -299,7 +322,7 @@ describe('Advanced Browse', function () {
 
         describe('8. Tags filter: "image:-null+description:-null"', function () {
             it('Will fetch tags which have an image and a description', function (done) {
-                TagAPI.browse({filter: 'image:-null+description:-null', order: 'name ASC'}).then(function (result) {
+                TagAPI.browse({filter: 'feature_image:-null+description:-null', order: 'name ASC'}).then(function (result) {
                     var ids;
                     // 1. Result should have the correct base structure
                     should.exist(result);
@@ -318,9 +341,9 @@ describe('Advanced Browse', function () {
                     // @TODO standardise how alphabetical ordering is done across DBs (see #6104)
                     // ids.should.eql([4, 2, 3]);
 
-                    should.exist(result.tags[0].image);
-                    should.exist(result.tags[1].image);
-                    should.exist(result.tags[2].image);
+                    should.exist(result.tags[0].feature_image);
+                    should.exist(result.tags[1].feature_image);
+                    should.exist(result.tags[2].feature_image);
 
                     should.exist(result.tags[0].description);
                     should.exist(result.tags[1].description);
@@ -339,6 +362,107 @@ describe('Advanced Browse', function () {
                     done();
                 }).catch(done);
             });
+        });
+    });
+
+    describe('Primary Tags', function () {
+        it('Will fetch posts which have a primary tag of photo', function (done) {
+            PostAPI.browse({
+                filter: 'primary_tag:photo',
+                include: 'tags'
+            }).then(function (result) {
+                var ids;
+
+                // 1. Result should have the correct base structure
+                should.exist(result);
+                result.should.have.property('posts');
+                result.should.have.property('meta');
+
+                // 2. The data part of the response should be correct
+                // We should have 5 matching items
+                result.posts.should.be.an.Array().with.lengthOf(4);
+
+                ids = _.map(result.posts, 'id');
+                ids.should.eql([
+                    testUtils.filterData.data.posts[10].id,
+                    testUtils.filterData.data.posts[8].id,
+                    testUtils.filterData.data.posts[2].id,
+                    testUtils.filterData.data.posts[1].id
+                ]);
+
+                _.each(result.posts, function (post) {
+                    post.page.should.be.false();
+                    post.status.should.eql('published');
+                });
+
+                // 3. The meta object should contain the right details
+                result.meta.should.have.property('pagination');
+                result.meta.pagination.should.be.an.Object().with.properties(['page', 'limit', 'pages', 'total', 'next', 'prev']);
+                result.meta.pagination.page.should.eql(1);
+                result.meta.pagination.limit.should.eql(15);
+                result.meta.pagination.pages.should.eql(1);
+                result.meta.pagination.total.should.eql(4);
+                should.equal(result.meta.pagination.next, null);
+                should.equal(result.meta.pagination.prev, null);
+
+                done();
+            }).catch(done);
+        });
+
+        it('Will fetch empty list if no post has matching primary-tag', function (done) {
+            PostAPI.browse({
+                filter: 'primary_tag:no-posts',
+                include: 'tags'
+            }).then(function (result) {
+                // 1. Result should have the correct base structure
+                should.exist(result);
+                result.should.have.property('posts');
+                result.should.have.property('meta');
+
+                // 2. The data part of the response should be correct
+                // We should have 5 matching items
+                result.posts.should.be.an.Array().with.lengthOf(0);
+
+                // 3. The meta object should contain the right details
+                result.meta.should.have.property('pagination');
+                result.meta.pagination.should.be.an.Object().with.properties(['page', 'limit', 'pages', 'total', 'next', 'prev']);
+                result.meta.pagination.page.should.eql(1);
+                result.meta.pagination.limit.should.eql(15);
+                result.meta.pagination.pages.should.eql(1);
+                result.meta.pagination.total.should.eql(0);
+                should.equal(result.meta.pagination.next, null);
+                should.equal(result.meta.pagination.prev, null);
+
+                done();
+            }).catch(done);
+        });
+
+        it('Will fetch empty list if primary_tag is internal', function (done) {
+            PostAPI.browse({
+                filter: 'primary_tag:no-posts',
+                include: 'tags'
+            }).then(function (result) {
+                // 1. Result should have the correct base structure
+                should.exist(result);
+                result.should.have.property('posts');
+                result.should.have.property('meta');
+
+                // 2. The data part of the response should be correct
+                // We should have 5 matching items
+                result.posts.should.be.an.Array().with.lengthOf(0);
+
+                // 3. The meta object should contain the right details
+                result.meta.should.have.property('pagination');
+                result.meta.pagination.should.be.an.Object().with.properties(['page', 'limit', 'pages', 'total', 'next', 'prev']);
+                result.meta.pagination.page.should.eql(1);
+                result.meta.pagination.limit.should.eql(15);
+                result.meta.pagination.pages.should.eql(1);
+                result.meta.pagination.total.should.eql(0);
+                should.equal(result.meta.pagination.next, null);
+                should.equal(result.meta.pagination.prev, null);
+
+                done();
+            }).catch(done);
         });
     });
 
@@ -368,7 +492,7 @@ describe('Advanced Browse', function () {
                 }).count.posts.should.eql(5);
 
                 _.find(result.tags, function (tag) {
-                    return tag.name === 'Audio';
+                    return tag.name === '#Audio';
                 }).count.posts.should.eql(6);
 
                 _.find(result.tags, function (tag) {
@@ -420,7 +544,7 @@ describe('Advanced Browse', function () {
                 }).count.posts.should.eql(5);
 
                 _.find(result.tags, function (tag) {
-                    return tag.name === 'Audio';
+                    return tag.name === '#Audio';
                 }).count.posts.should.eql(6);
 
                 _.find(result.tags, function (tag) {
@@ -597,7 +721,12 @@ describe('Advanced Browse', function () {
             });
 
             it('Will fetch posts with a given author', function (done) {
-                PostAPI.browse({filter: 'author:leslie', include: 'tag,author', limit: 5, page: 2}).then(function (result) {
+                PostAPI.browse({
+                    filter: 'author:leslie',
+                    include: 'tag,author',
+                    limit: 5,
+                    page: 2
+                }).then(function (result) {
                     var ids;
                     // 1. Result should have the correct base structure
                     should.exist(result);

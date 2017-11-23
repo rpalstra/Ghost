@@ -114,7 +114,7 @@ describe('Auth Strategies', function () {
     });
 
     describe('Bearer Strategy', function () {
-        var tokenStub, userStub;
+        var tokenStub, userStub, userIsActive;
 
         beforeEach(function () {
             tokenStub = sandbox.stub(Models.Accesstoken, 'findOne');
@@ -124,6 +124,7 @@ describe('Auth Strategies', function () {
                     return fakeValidToken;
                 }
             }));
+
             tokenStub.withArgs({token: fakeInvalidToken.token}).returns(new Promise.resolve({
                 toJSON: function () {
                     return fakeInvalidToken;
@@ -135,6 +136,9 @@ describe('Auth Strategies', function () {
             userStub.withArgs({id: 3}).returns(new Promise.resolve({
                 toJSON: function () {
                     return {id: 3};
+                },
+                isActive: function () {
+                    return userIsActive;
                 }
             }));
         });
@@ -142,6 +146,8 @@ describe('Auth Strategies', function () {
         it('should find user with valid token', function (done) {
             var accessToken = 'valid-token',
                 userId = 3;
+
+            userIsActive = true;
 
             authStrategies.bearerStrategy(accessToken, next).then(function () {
                 tokenStub.calledOnce.should.be.true();
@@ -151,6 +157,25 @@ describe('Auth Strategies', function () {
                 next.calledOnce.should.be.true();
                 next.firstCall.args.length.should.eql(3);
                 next.calledWith(null, {id: userId}, {scope: '*'}).should.be.true();
+                done();
+            }).catch(done);
+        });
+
+        it('should find user with valid token, but user is suspended', function (done) {
+            var accessToken = 'valid-token',
+                userId = 3;
+
+            userIsActive = false;
+
+            authStrategies.bearerStrategy(accessToken, next).then(function () {
+                tokenStub.calledOnce.should.be.true();
+                tokenStub.calledWith({token: accessToken}).should.be.true();
+                userStub.calledOnce.should.be.true();
+                userStub.calledWith({id: userId}).should.be.true();
+                next.calledOnce.should.be.true();
+                next.firstCall.args.length.should.eql(1);
+                (next.firstCall.args[0] instanceof errors.NoPermissionError).should.eql(true);
+                next.firstCall.args[0].message.should.eql('Your account was suspended.');
                 done();
             }).catch(done);
         });
@@ -201,29 +226,28 @@ describe('Auth Strategies', function () {
     });
 
     describe('Ghost Strategy', function () {
-        var userByEmailStub, inviteStub, userAddStub, userEditStub, userFindOneStub;
+        var inviteFindOneStub, userAddStub, userEditStub, userFindOneStub;
 
         beforeEach(function () {
-            userByEmailStub = sandbox.stub(Models.User, 'getByEmail');
             userFindOneStub = sandbox.stub(Models.User, 'findOne');
             userAddStub = sandbox.stub(Models.User, 'add');
             userEditStub = sandbox.stub(Models.User, 'edit');
-            inviteStub = sandbox.stub(Models.Invite, 'findOne');
+            inviteFindOneStub = sandbox.stub(Models.Invite, 'findOne');
         });
 
         it('with invite, but with wrong invite token', function (done) {
             var ghostAuthAccessToken = '12345',
                 req = {body: {inviteToken: 'wrong'}},
-                profile = {email: 'test@example.com'};
+                profile = {email: 'test@example.com', id: '1234'};
 
-            userByEmailStub.returns(Promise.resolve(null));
-            inviteStub.returns(Promise.reject(new errors.NotFoundError()));
+            userFindOneStub.returns(Promise.resolve(null));
+            inviteFindOneStub.returns(Promise.reject(new errors.NotFoundError()));
 
             authStrategies.ghostStrategy(req, ghostAuthAccessToken, null, profile, function (err) {
                 should.exist(err);
                 (err instanceof errors.NotFoundError).should.eql(true);
-                userByEmailStub.calledOnce.should.be.true();
-                inviteStub.calledOnce.should.be.true();
+                userFindOneStub.calledOnce.should.be.false();
+                inviteFindOneStub.calledOnce.should.be.true();
                 done();
             });
         });
@@ -231,10 +255,10 @@ describe('Auth Strategies', function () {
         it('with correct invite token, but expired', function (done) {
             var ghostAuthAccessToken = '12345',
                 req = {body: {inviteToken: 'token'}},
-                profile = {email: 'test@example.com'};
+                profile = {email: 'test@example.com', id: '1234'};
 
-            userByEmailStub.returns(Promise.resolve(null));
-            inviteStub.returns(Promise.resolve(Models.Invite.forge({
+            userFindOneStub.returns(Promise.resolve(null));
+            inviteFindOneStub.returns(Promise.resolve(Models.Invite.forge({
                 id: 1,
                 token: 'token',
                 expires: Date.now() - 1000
@@ -243,8 +267,8 @@ describe('Auth Strategies', function () {
             authStrategies.ghostStrategy(req, ghostAuthAccessToken, null, profile, function (err) {
                 should.exist(err);
                 (err instanceof errors.NotFoundError).should.eql(true);
-                userByEmailStub.calledOnce.should.be.true();
-                inviteStub.calledOnce.should.be.true();
+                userFindOneStub.calledOnce.should.be.false();
+                inviteFindOneStub.calledOnce.should.be.true();
                 done();
             });
         });
@@ -252,18 +276,32 @@ describe('Auth Strategies', function () {
         it('with correct invite token', function (done) {
             var ghostAuthAccessToken = '12345',
                 req = {body: {inviteToken: 'token'}},
-                invitedProfile = {email: 'test@example.com'},
+                invitedProfile = {email: 'test@example.com', name: 'Wolfram Alpha', id: '1234'},
                 invitedUser = {id: 2},
                 inviteModel = Models.Invite.forge({
                     id: 1,
                     token: 'token',
-                    expires: Date.now() + 1000
+                    expires: Date.now() + 2000,
+                    role_id: '2'
                 });
 
-            userByEmailStub.returns(Promise.resolve(null));
-            userAddStub.returns(Promise.resolve(invitedUser));
+            sandbox.stub(globalUtils, 'uid').returns('12345678');
+
+            userFindOneStub.returns(Promise.resolve(null));
+
+            userAddStub.withArgs({
+                email: invitedProfile.email,
+                name: invitedProfile.name,
+                password: '12345678',
+                roles: [inviteModel.get('role_id')],
+                ghost_auth_id: invitedProfile.id,
+                ghost_auth_access_token: ghostAuthAccessToken
+            }, {
+                context: {internal: true}
+            }).returns(Promise.resolve(invitedUser));
+
             userEditStub.returns(Promise.resolve(invitedUser));
-            inviteStub.returns(Promise.resolve(inviteModel));
+            inviteFindOneStub.returns(Promise.resolve(inviteModel));
             sandbox.stub(inviteModel, 'destroy').returns(Promise.resolve());
 
             authStrategies.ghostStrategy(req, ghostAuthAccessToken, null, invitedProfile, function (err, user, profile) {
@@ -273,8 +311,9 @@ describe('Auth Strategies', function () {
                 user.should.eql(invitedUser);
                 profile.should.eql(invitedProfile);
 
-                userByEmailStub.calledOnce.should.be.true();
-                inviteStub.calledOnce.should.be.true();
+                userAddStub.calledOnce.should.be.true();
+                userFindOneStub.calledOnce.should.be.false();
+                inviteFindOneStub.calledOnce.should.be.true();
                 done();
             });
         });
@@ -282,25 +321,32 @@ describe('Auth Strategies', function () {
         it('setup', function (done) {
             var ghostAuthAccessToken = '12345',
                 req = {body: {}},
-                ownerProfile = {email: 'test@example.com'},
+                ownerProfile = {email: 'test@example.com', name: 'Wolfram Alpha', id: '1234'},
                 owner = {id: 2};
 
-            userByEmailStub.returns(Promise.resolve(null));
-            userFindOneStub.returns(Promise.resolve(_.merge({}, {status: 'inactive'}, owner)));
-            userEditStub.withArgs({status: 'active', email: 'test@example.com'}, {
-                context: {internal: true},
-                id: owner.id
-            }).returns(Promise.resolve(owner));
+            userFindOneStub.withArgs({ghost_auth_id: ownerProfile.id})
+                .returns(Promise.resolve(null));
 
-            userEditStub.withArgs({ghost_auth_access_token: ghostAuthAccessToken}, {
+            userFindOneStub.withArgs({slug: 'ghost-owner', status: 'inactive'})
+                .returns(Promise.resolve(_.merge({}, {status: 'inactive'}, owner)));
+
+            userEditStub.withArgs({
+                email: ownerProfile.email,
+                name: ownerProfile.name,
+                slug: null,
+                status: 'active',
+                ghost_auth_id: ownerProfile.id,
+                ghost_auth_access_token: ghostAuthAccessToken
+            }, {
                 context: {internal: true},
                 id: owner.id
             }).returns(Promise.resolve(owner));
 
             authStrategies.ghostStrategy(req, ghostAuthAccessToken, null, ownerProfile, function (err, user, profile) {
                 should.not.exist(err);
-                userByEmailStub.calledOnce.should.be.true();
-                inviteStub.calledOnce.should.be.false();
+                userFindOneStub.calledTwice.should.be.true();
+                inviteFindOneStub.calledOnce.should.be.false();
+                userEditStub.calledOnce.should.be.true();
 
                 should.exist(user);
                 should.exist(profile);
@@ -310,28 +356,71 @@ describe('Auth Strategies', function () {
             });
         });
 
-        it('auth', function (done) {
+        it('sign in', function (done) {
             var ghostAuthAccessToken = '12345',
                 req = {body: {}},
-                ownerProfile = {email: 'test@example.com'},
-                owner = {id: 2};
+                ownerProfile = {email: 'test@example.com', name: 'Wolfram Alpha', id: '12345'},
+                owner = {
+                    id: 2, isActive: function () {
+                        return true;
+                    }
+                };
 
-            userByEmailStub.returns(Promise.resolve(owner));
-            userEditStub.withArgs({ghost_auth_access_token: ghostAuthAccessToken}, {
+            userFindOneStub.returns(Promise.resolve(owner));
+            userEditStub.withArgs({
+                email: ownerProfile.email,
+                name: ownerProfile.name,
+                ghost_auth_access_token: ghostAuthAccessToken,
+                ghost_auth_id: ownerProfile.id
+            }, {
                 context: {internal: true},
                 id: owner.id
             }).returns(Promise.resolve(owner));
 
             authStrategies.ghostStrategy(req, ghostAuthAccessToken, null, ownerProfile, function (err, user, profile) {
                 should.not.exist(err);
-                userByEmailStub.calledOnce.should.be.true();
+                userFindOneStub.calledOnce.should.be.true();
                 userEditStub.calledOnce.should.be.true();
-                inviteStub.calledOnce.should.be.false();
+                inviteFindOneStub.calledOnce.should.be.false();
 
                 should.exist(user);
                 should.exist(profile);
                 user.should.eql(owner);
                 profile.should.eql(ownerProfile);
+                done();
+            });
+        });
+
+        it('sign in, but user is suspended', function (done) {
+            var ghostAuthAccessToken = '12345',
+                req = {body: {}},
+                ownerProfile = {email: 'test@example.com', id: '12345'},
+                owner = {
+                    id: 2, isActive: function () {
+                        return false;
+                    }
+                };
+
+            userFindOneStub.returns(Promise.resolve(owner));
+            userEditStub.withArgs({
+                ghost_auth_access_token: ghostAuthAccessToken,
+                ghost_auth_id: ownerProfile.id,
+                email: ownerProfile.email
+            }, {
+                context: {internal: true},
+                id: owner.id
+            }).returns(Promise.resolve(owner));
+
+            authStrategies.ghostStrategy(req, ghostAuthAccessToken, null, ownerProfile, function (err, user, profile) {
+                should.exist(err);
+                err.message.should.eql('Your account was suspended.');
+
+                userFindOneStub.calledOnce.should.be.true();
+                userEditStub.calledOnce.should.be.false();
+                inviteFindOneStub.calledOnce.should.be.false();
+
+                should.not.exist(user);
+                should.not.exist(profile);
                 done();
             });
         });

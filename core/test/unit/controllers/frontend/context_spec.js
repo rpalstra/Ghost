@@ -1,9 +1,13 @@
-var should   = require('should'),
-    _        = require('lodash'),
+var should = require('should'),
+    sinon = require('sinon'),
+    _ = require('lodash'),
 
     // Stuff we are testing
-    channelConfig      = require('../../../../server/controllers/frontend/channel-config'),
-    setResponseContext = require('../../../../server/controllers/frontend/context');
+    channelUtils = require('../../../utils/channelUtils'),
+    setResponseContext = require('../../../../server/controllers/frontend/context'),
+    labs = require('../../../../server/utils/labs'),
+
+    sandbox = sinon.sandbox.create();
 
 describe('Contexts', function () {
     var req, res, data, setupContext;
@@ -19,6 +23,10 @@ describe('Contexts', function () {
         data = {};
     });
 
+    afterEach(function () {
+        sandbox.restore();
+    });
+
     /**
      * A context is created based on the URL, and the channel config if we're rendering
      * any part of a channel
@@ -30,11 +38,11 @@ describe('Contexts', function () {
         res.locals.relativeUrl = url;
 
         if (channel && _.isString(channel)) {
-            req.channelConfig = channelConfig.get(channel);
+            res.locals.channel = channelUtils.getTestChannel(channel);
         } else if (channel && _.isNumber(channel)) {
             pageParam = channel;
         } else if (channel) {
-            req.channelConfig = channel;
+            res.locals.channel = channel;
         }
 
         if (pageParam) {
@@ -248,9 +256,7 @@ describe('Contexts', function () {
         });
 
         describe('Custom', function () {
-            var featuredChannel = {
-                name: 'featured'
-            };
+            var featuredChannel = new channelUtils.Channel('featured');
 
             it('will use the channel name for a custom channel', function () {
                 // Setup test
@@ -263,6 +269,23 @@ describe('Contexts', function () {
                 should.exist(res.locals.context);
                 res.locals.context.should.be.an.Array().with.lengthOf(1);
                 res.locals.context[0].should.eql('featured');
+            });
+
+            it('will use a custom context for a custom channel', function () {
+                var channel = _.clone(featuredChannel);
+                channel.context = ['custom-context', 'test'];
+
+                // Setup test
+                setupContext('/featured/', channel);
+
+                // Execute test
+                setResponseContext(req, res, data);
+
+                // Check context
+                should.exist(res.locals.context);
+                res.locals.context.should.be.an.Array().with.lengthOf(2);
+                res.locals.context[0].should.eql('custom-context');
+                res.locals.context[1].should.eql('test');
             });
 
             it('will not identify /page/2/ as paged without page param', function () {
@@ -352,9 +375,13 @@ describe('Contexts', function () {
     });
 
     describe('Subscribe', function () {
-        it('should correctly identify /subscribe/ as the subscribe route', function () {
+        it('should identify /subscribe/ as the subscribe route if labs flag set', function () {
             // Setup test
+            sandbox.stub(labs, 'isSet').returns(true);
             setupContext('/subscribe/');
+            data.post = {
+                page: false
+            };
 
             // Execute test
             setResponseContext(req, res, data);
@@ -364,14 +391,14 @@ describe('Contexts', function () {
             res.locals.context.should.be.an.Array().with.lengthOf(1);
             res.locals.context[0].should.eql('subscribe');
         });
-    });
 
-    describe('RSS', function () {
-        // NOTE: this works, but is never used in reality, as setResponseContext isn't called
-        // for RSS feeds at the moment.
-        it('should correctly identify /rss/ as rss', function () {
+        it('should not identify /subscribe/ as subscribe route if labs flag NOT set', function () {
             // Setup test
-            setupContext('/rss/');
+            sandbox.stub(labs, 'isSet').returns(false);
+            setupContext('/subscribe/');
+            data.post = {
+                page: false
+            };
 
             // Execute test
             setResponseContext(req, res, data);
@@ -379,35 +406,10 @@ describe('Contexts', function () {
             // Check context
             should.exist(res.locals.context);
             res.locals.context.should.be.an.Array().with.lengthOf(1);
-            res.locals.context[0].should.eql('rss');
-        });
-
-        it('will not identify /rss/2/ as rss & paged without page param', function () {
-            // Setup test by setting relativeUrl
-            setupContext('/rss/2/');
-
-            // Execute test
-            setResponseContext(req, res, data);
-
-            // Check context
-            should.exist(res.locals.context);
-            res.locals.context.should.be.an.Array().with.lengthOf(1);
-            res.locals.context[0].should.eql('rss');
-        });
-
-        it('should correctly identify /rss/2/ as rss & paged with page param', function () {
-            // Setup test by setting relativeUrl
-            setupContext('/rss/2/', 2);
-
-            // Execute test
-            setResponseContext(req, res, data);
-
-            should.exist(res.locals.context);
-            res.locals.context.should.be.an.Array().with.lengthOf(2);
-            res.locals.context[0].should.eql('paged');
-            res.locals.context[1].should.eql('rss');
+            res.locals.context[0].should.eql('post');
         });
     });
+
     describe('AMP', function () {
         it('should correctly identify an AMP post', function () {
             // Setup test

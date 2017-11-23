@@ -1,15 +1,16 @@
-var debug         = require('debug')('ghost:admin:controller'),
-    _             = require('lodash'),
-    api           = require('../api'),
-    logging       = require('../logging'),
-    updateCheck   = require('../update-check'),
-    i18n          = require('../i18n');
+var debug = require('ghost-ignition').debug('admin:controller'),
+    _ = require('lodash'),
+    path = require('path'),
+    config = require('../config'),
+    api = require('../api'),
+    updateCheck = require('../update-check'),
+    logging = require('../logging'),
+    i18n = require('../i18n');
 
 // Route: index
 // Path: /ghost/
 // Method: GET
 module.exports = function adminController(req, res) {
-    /*jslint unparam:true*/
     debug('index called');
 
     updateCheck().then(function then() {
@@ -25,7 +26,11 @@ module.exports = function adminController(req, res) {
             location: 'upgrade.new-version-available',
             dismissible: false,
             message: i18n.t('notices.controllers.newVersionAvailable',
-                            {version: updateVersion, link: '<a href="http://support.ghost.org/how-to-upgrade/" target="_blank">Click here</a>'})};
+                {
+                    version: updateVersion,
+                    link: '<a href="https://docs.ghost.org/docs/upgrade" target="_blank">Click here</a>'
+                })
+        };
 
         return api.notifications.browse({context: {internal: true}}).then(function then(results) {
             if (!_.some(results.notifications, {message: notification.message})) {
@@ -33,6 +38,11 @@ module.exports = function adminController(req, res) {
             }
         });
     }).finally(function noMatterWhat() {
-        res.render('default');
-    }).catch(logging.logError);
+        var defaultTemplate = config.get('env') === 'production' ? 'default-prod.html' : 'default.html',
+            templatePath = path.resolve(config.get('paths').adminViews, defaultTemplate);
+
+        res.sendFile(templatePath);
+    }).catch(function (err) {
+        logging.error(err);
+    });
 };

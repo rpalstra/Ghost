@@ -9,7 +9,6 @@ function GhostError(options) {
     errors.IgnitionError.call(this, options);
 }
 
-// jscs:disable
 var ghostErrors = {
     DataExportError: function DataExportError(options) {
         GhostError.call(this, _.merge({
@@ -53,6 +52,18 @@ var ghostErrors = {
             statusCode: 422,
             errorType: 'ThemeValidationError',
             errorDetails: {}
+        }, options));
+    },
+    DisabledFeatureError: function DisabledFeatureError(options) {
+        GhostError.call(this, _.merge({
+            statusCode: 409,
+            errorType: 'DisabledFeatureError'
+        }, options));
+    },
+    UpdateCollisionError: function UpdateCollisionError(options) {
+        GhostError.call(this, _.merge({
+            statusCode: 409,
+            errorType: 'UpdateCollisionError'
         }, options));
     }
 };

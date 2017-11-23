@@ -34,9 +34,9 @@
     "errors": {
         "apps": {
             "failedToParseActiveAppsSettings": {
-                "error": "Failed to parse activeApps setting value: {message}",
+                "error": "Failed to parse active_apps setting value: {message}",
                 "context": "Your apps will not be loaded.",
-                "help": "Check your settings table for typos in the activeApps value. It should look like: [\"app-1\", \"app2\"] (double quotes required)."
+                "help": "Check your settings table for typos in the active_apps value. It should look like: [\"app-1\", \"app2\"] (double quotes required)."
             },
             "appWillNotBeLoaded": {
                 "error": "The app will not be loaded",
@@ -66,7 +66,7 @@
         },
         "middleware": {
             "api": {
-                "versionMismatch": "Request for version {requestVersion} does not match current version {currentVersion}."
+                "versionMismatch": "Client request for {clientVersion} does not match server version {serverVersion}."
             },
             "auth": {
                 "clientAuthenticationFailed": "Client Authentication Failed",
@@ -105,7 +105,13 @@
                 }
             },
             "themehandler": {
-                "missingTheme": "The currently active theme \"{theme}\" is missing."
+                "missingTheme": "The currently active theme \"{theme}\" is missing.",
+                "invalidTheme": "The currently active theme \"{theme}\" is invalid.",
+                "themeHasErrors": "The currently active theme \"{theme}\" has errors, but will still work.",
+                "activateFailed": "Unable to activate the theme \"{theme}\"."
+            },
+            "redirects": {
+                "register": "Could not register custom redirects."
             }
         },
         "utils": {
@@ -115,18 +121,10 @@
                 "willBeRequired": "This will be required in future. Please see {url}",
                 "themeFileIsMalformed": "Theme package.json file is malformed"
             },
-            "validatethemes": {
-                "themeWithNoPackage": {
-                    "message": "Found a theme with no package.json file",
-                    "context": "Theme name: {name}",
-                    "help": "This will be required in future. Please see {url}"
-                },
-                "malformedPackage": {
-                    "message": "Found a malformed package.json",
-                    "context": "Theme name: {name}",
-                    "help": "Valid package.json will be required in future. Please see {url}"
-                }
-            }
+            "blogIcon": {
+                "error": "Could not fetch icon dimensions."
+            },
+            "redirectsWrongFormat": "Incorrect redirects file format."
         },
         "config": {
             "couldNotLocateConfigFile": {
@@ -174,9 +172,9 @@
         },
         "general": {
             "maintenance": "Ghost is currently undergoing maintenance, please wait a moment then retry.",
-            "moreInfo": "\nMore info: {info}",
             "requiredOnFuture": "This will be required in future. Please see {link}",
-            "internalError": "Something went wrong."
+            "internalError": "Something went wrong.",
+            "jsonParse": "Could not parse JSON: {context}."
         },
         "httpServer": {
             "addressInUse": {
@@ -192,17 +190,15 @@
         },
         "mail": {
             "incompleteMessageData": {
-                "error": "Error: Incomplete message data."
+                "error": "Incomplete message data."
             },
             "failedSendingEmail": {
-                "error": "Error: Failed to send email"
+                "error": "Failed to send email."
             },
             "noMailServerAtAddress": {
-                "error": " - no mail server found at {domain}"
+                "error": " No mail server found at {domain}."
             },
-            "messageNotSent": {
-                "error": "Error: Message could not be sent"
-            }
+            "reason": " Reason: {reason}."
         },
         "models": {
             "subscriber": {
@@ -232,7 +228,8 @@
                 "missingContext": "missing context",
                 "onlyOneRolePerUserSupported": "Only one role per user is supported at the moment.",
                 "methodDoesNotSupportOwnerRole": "This method does not support assigning the owner role",
-                "passwordDoesNotComplyLength": "Your password must be at least 8 characters long.",
+                "passwordDoesNotComplyLength": "Your password must be at least {minLength} characters long.",
+                "passwordDoesNotComplySecurity": "Sorry, you cannot use an insecure password.",
                 "notEnoughPermission": "You do not have permission to perform this action",
                 "noUserWithEnteredEmailAddr": "There is no user with that email address.",
                 "userIsInactive": "The user with that email address is inactive.",
@@ -244,12 +241,14 @@
                 },
                 "incorrectPassword": "Your password is incorrect.",
                 "accountLocked": "Your account is locked. Please reset your password to log in again by clicking the \"Forgotten password?\" link!",
+                "accountSuspended": "Your account was suspended.",
                 "newPasswordsDoNotMatch": "Your new passwords do not match",
                 "passwordRequiredForOperation": "Password is required for this operation",
                 "expiredToken": "Expired token",
                 "tokenLocked": "Token locked",
                 "invalidToken": "Invalid token",
                 "userNotFound": "User not found",
+                "ownerNotFound": "Owner not found",
                 "onlyOwnerCanTransferOwnerRole": "Only owners are able to transfer the owner role.",
                 "onlyAdmCanBeAssignedOwnerRole": "Only administrators can be assigned the owner role."
             },
@@ -260,7 +259,8 @@
                 "token": {
                     "noUserFound": "No user found",
                     "tokenNotFound": "Token not found"
-                }
+                },
+                "invalidDate": "Date format for `{key}` is invalid."
             },
             "plugins": {
                 "filter": {
@@ -338,9 +338,17 @@
                 "notFound": "Job not found.",
                 "publishInThePast": "Use the force flag to publish a post in the past."
             },
+            "redirects": {
+                "missingFile": "Please select a JSON file.",
+                "invalidFile": "Please select a valid JSON file to import."
+            },
             "settings": {
                 "problemFindingSetting": "Problem finding setting: {key}",
                 "accessCoreSettingFromExtReq": "Attempted to access core setting from external request",
+                "activeThemeSetViaAPI": {
+                    "error": "Attempted to change active_theme via settings API",
+                    "help": "Please activate theme via the themes API endpoints instead"
+                },
                 "invalidJsonInLabs": "Error: Invalid JSON in settings.labs",
                 "labsColumnCouldNotBeParsed": "The column with key \"labs\" could not be parsed as JSON",
                 "tryUpdatingLabs": "Please try updating a setting on the labs page, or manually editing your DB",
@@ -368,7 +376,8 @@
                 "missingFile": "Please select a theme.",
                 "invalidFile": "Please select a valid zip file.",
                 "overrideCasper": "Please rename your zip, it's not allowed to override the default casper theme.",
-                "destroyCasper": "Deleting the default casper theme is not allowed."
+                "destroyCasper": "Deleting the default casper theme is not allowed.",
+                "destroyActive": "Deleting the active theme is not allowed."
             },
             "images": {
                 "missingFile": "Please select an image.",
@@ -376,16 +385,13 @@
             },
             "icons": {
                 "missingFile": "Please select an icon.",
-                "fileSizeTooLarge": "Please select an icon file smaller than 100kb.",
-                "iconNotSquare": "The icon needs to be a square.",
-                "fileTooLarge": "Please select an icon file smaller than 1000px.",
-                "fileTooSmall": "Please select an icon file larger than 32px.",
-                "invalidFile": "Please select a valid icon file.",
+                "invalidFile": "Blog icon must be a square .ico or .png file between 60px – 1,000px, under 100kb.",
                 "couldNotGetSize": "Couldn/'t get icon dimensions"
             },
             "users": {
                 "userNotFound": "User not found.",
                 "cannotChangeOwnRole": "You cannot change your own role.",
+                "cannotChangeStatus": "You cannot change your own status.",
                 "cannotChangeOwnersRole": "Cannot change Owner's role",
                 "noPermissionToEditUser": "You do not have permission to edit this user",
                 "noPermissionToAddUser": "You do not have permission to add this user",
@@ -411,6 +417,9 @@
                 },
                 "notAllowedToInviteOwner": "Not allowed to invite an owner user.",
                 "notAllowedToInvite": "Not allowed to invite this role."
+            },
+            "webhooks": {
+                "webhookAlreadyExists": "A webhook for requested event with supplied target_url already exists."
             }
         },
         "data": {
@@ -448,13 +457,13 @@
                         "failedToParseImportJson": "Failed to parse the import JSON file."
                     }
                 }
-            },
-            "xml": {
-                "xmlrpc": {
-                    "pingUpdateFailed": {
-                        "error": "Pinging services for updates on your blog failed, your blog will continue to function.",
-                        "help": "If you get this error repeatedly, please seek help on {url}."
-                    }
+            }
+        },
+        "services": {
+            "ping": {
+                "requestFailed": {
+                    "error": "The {service} service was unable to send a ping request, your blog will continue to function.",
+                    "help": "If you get this error repeatedly, please seek help on {url}."
                 }
             }
         },
@@ -476,6 +485,7 @@
             "whilstTryingToRender": "whilst trying to render an error page for the error: ",
             "renderingErrorPage": "Rendering Error Page",
             "caughtProcessingError": "Ghost caught a processing error in the middleware layer.",
+            "imageNotFound": "Image not found",
             "pageNotFound": "Page not found",
             "resourceNotFound": "Resource not found"
         }
@@ -487,17 +497,14 @@
         },
         "helpers": {
             "helperNotAvailable": "The \\{\\{{helperName}\\}\\} helper is not available.",
-            "apiMustBeEnabled": "The {flagName} labs flag must be enabled if you wish to use the \\{\\{{helperName}\\}\\} helper.",
+            "flagMustBeEnabled": "The {flagName} flag must be enabled in labs if you wish to use the \\{\\{{helperName}\\}\\} helper.",
             "seeLink": "See {url}",
+            "mustBeCalledAsBlock": "The \\{\\{{helperName}\\}\\} helper must be called as a block. E.g.  \\{\\{#{helperName}\\}\\} \\{\\{/{helperName}\\}\\}",
             "foreach": {
                 "iteratorNeeded": "Need to pass an iterator to #foreach"
             },
             "get": {
-                "mustBeCalledAsBlock": "Get helper must be called as a block",
-                "invalidResource": "Invalid resource given to get helper",
-                "helperNotAvailable": "The \\{\\{get\\}\\} helper is not available.",
-                "apiMustBeEnabled": "Public API access must be enabled if you wish to use the \\{\\{get\\}\\} helper.",
-                "seeLink": "See {url}"
+                "invalidResource": "Invalid resource given to get helper"
             },
             "has": {
                 "invalidAttribute": "Invalid or no attribute given to has helper"
@@ -525,6 +532,10 @@
             "plural": {
                 "valuesMustBeDefined": "All values must be defined for empty, singular and plural"
             },
+            "img_url": {
+                "attrIsRequired": "Attribute is required e.g. \\{\\{img_url feature_image\\}\\}",
+                "attrIsUnknown": "Attribute passed to \\{\\{img_url\\}\\} is unknown"
+            },
             "template": {
                 "templateNotFound": "Template {name} not found."
             }
@@ -542,14 +553,14 @@
         "httpServer": {
             "cantTouchThis": "Can't touch this",
             "ghostIsRunning": "Ghost is running...",
-            "yourBlogIsAvailableOn": "\nYour blog is now available on {url}",
-            "ctrlCToShutDown": "\nCtrl+C to shut down",
+            "yourBlogIsAvailableOn": "Your blog is now available on {url}",
+            "ctrlCToShutDown": "Ctrl+C to shut down",
             "ghostIsRunningIn": "Ghost is running in {env}...",
-            "listeningOn": "\nListening on",
-            "urlConfiguredAs": "\nUrl configured as: {url}",
-            "ghostHasShutdown": "\nGhost has shut down",
-            "yourBlogIsNowOffline": "\nYour blog is now offline",
-            "ghostWasRunningFor": "\nGhost was running for",
+            "listeningOn": "Listening on: {host}:{port}",
+            "urlConfiguredAs": "Url configured as: {url}",
+            "ghostHasShutdown": "Ghost has shut down",
+            "yourBlogIsNowOffline": "Your blog is now offline",
+            "ghostWasRunningFor": "Ghost was running for",
             "ghostIsClosingConnections": "Ghost is closing connections"
         },
         "mail": {
@@ -574,11 +585,14 @@
             "validation": {
                 "index": {
                     "valueCannotBeBlank": "Value in [{tableName}.{columnKey}] cannot be blank.",
-                    "valueMustBeBoolean": "Value in [settings.key] must be one of true, false, 0 or 1.",
+                    "valueMustBeBoolean": "Value in [{tableName}.{columnKey}] must be one of true, false, 0 or 1.",
                     "valueExceedsMaxLength": "Value in [{tableName}.{columnKey}] exceeds maximum length of {maxlength} characters.",
                     "valueIsNotInteger": "Value in [{tableName}.{columnKey}] is not an integer.",
                     "themeCannotBeActivated": "{themeName} cannot be activated because it is not currently installed.",
-                    "validationFailed": "Validation ({validationName}) failed for {key}"
+                    "validationFailed": "Validation ({validationName}) failed for {key}",
+                    "validationFailedTypes": {
+                        "isLength": "Value in [{tableName}.{key}] exceeds maximum length of {max} characters."
+                    }
                 }
             }
         }

@@ -1,13 +1,12 @@
 // # API Utils
 // Shared helpers for working with the API
 var Promise = require('bluebird'),
-    _       = require('lodash'),
-    path    = require('path'),
-    errors  = require('../errors'),
+    _ = require('lodash'),
+    path = require('path'),
     permissions = require('../permissions'),
-    validation  = require('../data/validation'),
-    i18n    = require('../i18n'),
-
+    validation = require('../data/validation'),
+    errors = require('../errors'),
+    i18n = require('../i18n'),
     utils;
 
 utils = {
@@ -119,10 +118,11 @@ utils = {
                 to: {isDate: true},
                 fields: {matches: /^[\w, ]+$/},
                 order: {matches: /^[a-z0-9_,\. ]+$/i},
-                name: {}
+                name: {},
+                email: {isEmail: true}
             },
             // these values are sanitised/validated separately
-            noValidation = ['data', 'context', 'include', 'filter'],
+            noValidation = ['data', 'context', 'include', 'filter', 'forUpdate', 'transacting', 'formats'],
             errors = [];
 
         _.each(options, function (value, key) {
@@ -195,9 +195,10 @@ utils = {
      * ## Handle Permissions
      * @param {String} docName
      * @param {String} method (browse || read || edit || add || destroy)
+     * * @param {Array} unsafeAttrNames - attribute names (e.g. post.status) that could change the outcome
      * @returns {Function}
      */
-    handlePermissions: function handlePermissions(docName, method) {
+    handlePermissions: function handlePermissions(docName, method, unsafeAttrNames) {
         var singular = docName.replace(/s$/, '');
 
         /**
@@ -207,7 +208,8 @@ utils = {
          * @returns {Object} options
          */
         return function doHandlePermissions(options) {
-            var permsPromise = permissions.canThis(options.context)[method][singular](options.id);
+            var unsafeAttrObject = unsafeAttrNames && _.has(options, 'data.[' + docName + '][0]') ? _.pick(options.data[docName][0], unsafeAttrNames) : {},
+                permsPromise = permissions.canThis(options.context)[method][singular](options.id, unsafeAttrObject);
 
             return permsPromise.then(function permissionGranted() {
                 return options;
@@ -243,12 +245,16 @@ utils = {
         return this.trimAndLowerCase(fields);
     },
 
+    prepareFormats: function prepareFormats(formats, allowedFormats) {
+        return _.intersection(this.trimAndLowerCase(formats), allowedFormats);
+    },
+
     /**
      * ## Convert Options
      * @param {Array} allowedIncludes
      * @returns {Function} doConversion
      */
-    convertOptions: function convertOptions(allowedIncludes) {
+    convertOptions: function convertOptions(allowedIncludes, allowedFormats) {
         /**
          * Convert our options from API-style to Model-style
          * @param {Object} options
@@ -258,10 +264,20 @@ utils = {
             if (options.include) {
                 options.include = utils.prepareInclude(options.include, allowedIncludes);
             }
+
             if (options.fields) {
                 options.columns = utils.prepareFields(options.fields);
                 delete options.fields;
             }
+
+            if (options.formats) {
+                options.formats = utils.prepareFormats(options.formats, allowedFormats);
+            }
+
+            if (options.formats && options.columns) {
+                options.columns = options.columns.concat(options.formats);
+            }
+
             return options;
         };
     },
@@ -273,7 +289,7 @@ utils = {
      * @param {String} docName
      * @returns {Promise(Object)} resolves to the original object if it checks out
      */
-    checkObject: function (object, docName, editId) {
+    checkObject: function checkObject(object, docName, editId) {
         if (_.isEmpty(object) || _.isEmpty(object[docName]) || _.isEmpty(object[docName][0])) {
             return Promise.reject(new errors.BadRequestError({
                 message: i18n.t('errors.api.utils.noRootKeyProvided', {docName: docName})
@@ -305,10 +321,10 @@ utils = {
 
         return Promise.resolve(object);
     },
-    checkFileExists: function (fileData) {
+    checkFileExists: function checkFileExists(fileData) {
         return !!(fileData.mimetype && fileData.path);
     },
-    checkFileIsValid: function (fileData, types, extensions) {
+    checkFileIsValid: function checkFileIsValid(fileData, types, extensions) {
         var type = fileData.mimetype,
             ext = path.extname(fileData.name).toLowerCase();
 

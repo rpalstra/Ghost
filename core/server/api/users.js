@@ -1,15 +1,14 @@
 // # Users API
 // RESTful API for the User resource
-var Promise         = require('bluebird'),
-    _               = require('lodash'),
-    dataProvider    = require('../models'),
-    canThis         = require('../permissions').canThis,
-    errors          = require('../errors'),
-    events          = require('../events'),
-    utils           = require('./utils'),
-    pipeline        = require('../utils/pipeline'),
-    i18n            = require('../i18n'),
-    docName         = 'users',
+var Promise = require('bluebird'),
+    _ = require('lodash'),
+    pipeline = require('../utils/pipeline'),
+    apiUtils = require('./utils'),
+    canThis = require('../permissions').canThis,
+    models = require('../models'),
+    errors = require('../errors'),
+    i18n = require('../i18n'),
+    docName = 'users',
     // TODO: implement created_by, updated_by
     allowedIncludes = ['count.posts', 'permissions', 'roles', 'roles.permissions'],
     users;
@@ -28,7 +27,7 @@ users = {
      */
     browse: function browse(options) {
         var extraOptions = ['status'],
-            permittedOptions = utils.browseDefaultOptions.concat(extraOptions),
+            permittedOptions = apiUtils.browseDefaultOptions.concat(extraOptions),
             tasks;
 
         /**
@@ -38,14 +37,14 @@ users = {
          * @returns {Object} options
          */
         function doQuery(options) {
-            return dataProvider.User.findPage(options);
+            return models.User.findPage(options);
         }
 
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
-            utils.validate(docName, {opts: permittedOptions}),
-            utils.handlePublicPermissions(docName, 'browse'),
-            utils.convertOptions(allowedIncludes),
+            apiUtils.validate(docName, {opts: permittedOptions}),
+            apiUtils.handlePublicPermissions(docName, 'browse'),
+            apiUtils.convertOptions(allowedIncludes),
             doQuery
         ];
 
@@ -60,11 +59,10 @@ users = {
      */
     read: function read(options) {
         var attrs = ['id', 'slug', 'status', 'email', 'role'],
-            tasks,
-            isMe = options.id === 'me';
+            tasks;
 
         // Special handling for /users/me request
-        if (isMe && options.context && options.context.user) {
+        if (options.id === 'me' && options.context && options.context.user) {
             options.id = options.context.user;
         }
 
@@ -75,29 +73,30 @@ users = {
          * @returns {Object} options
          */
         function doQuery(options) {
-            return dataProvider.User.findOne(options.data, _.omit(options, ['data']));
+            return models.User.findOne(options.data, _.omit(options, ['data']))
+                .then(function onModelResponse(model) {
+                    if (!model) {
+                        return Promise.reject(new errors.NotFoundError({
+                            message: i18n.t('errors.api.users.userNotFound')
+                        }));
+                    }
+
+                    return {
+                        users: [model.toJSON(options)]
+                    };
+                });
         }
 
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
-            utils.validate(docName, {attrs: attrs}),
-            utils.handlePublicPermissions(docName, 'read'),
-            utils.convertOptions(allowedIncludes),
+            apiUtils.validate(docName, {attrs: attrs}),
+            apiUtils.handlePublicPermissions(docName, 'read'),
+            apiUtils.convertOptions(allowedIncludes),
             doQuery
         ];
 
         // Pipeline calls each task passing the result of one to be the arguments for the next
-        return pipeline(tasks, options).then(function formatResponse(result) {
-            if (result) {
-                if (isMe) {
-                    events.emit('read:users:me', result);
-                }
-
-                return {users: [result.toJSON(options)]};
-            }
-
-            return Promise.reject(new errors.NotFoundError({message: i18n.t('errors.api.users.userNotFound')}));
-        });
+        return pipeline(tasks, options);
     },
 
     /**
@@ -108,7 +107,7 @@ users = {
      */
     edit: function edit(object, options) {
         var extraOptions = ['editRoles'],
-            permittedOptions = extraOptions.concat(utils.idDefaultOptions),
+            permittedOptions = extraOptions.concat(apiUtils.idDefaultOptions),
             tasks;
 
         if (object.users && object.users[0] && object.users[0].roles && object.users[0].roles[0]) {
@@ -135,7 +134,16 @@ users = {
             }
 
             return canThis(options.context).edit.user(options.id).then(function () {
-                // if roles aren't in the payload, proceed with the edit
+                // CASE: can't edit my own status to inactive or locked
+                if (options.id === options.context.user) {
+                    if (models.User.inactiveStates.indexOf(options.data.users[0].status) !== -1) {
+                        return Promise.reject(new errors.NoPermissionError({
+                            message: i18n.t('errors.api.users.cannotChangeStatus')
+                        }));
+                    }
+                }
+
+                // CASE: if roles aren't in the payload, proceed with the edit
                 if (!(options.data.users[0].roles && options.data.users[0].roles[0])) {
                     return options;
                 }
@@ -145,20 +153,24 @@ users = {
                     roleId = role.id || role,
                     editedUserId = options.id;
 
-                return dataProvider.User.findOne(
+                return models.User.findOne(
                     {id: options.context.user, status: 'all'}, {include: ['roles']}
                 ).then(function (contextUser) {
                     var contextRoleId = contextUser.related('roles').toJSON(options)[0].id;
 
                     if (roleId !== contextRoleId && editedUserId === contextUser.id) {
-                        return Promise.reject(new errors.NoPermissionError({message: i18n.t('errors.api.users.cannotChangeOwnRole')}));
+                        return Promise.reject(new errors.NoPermissionError({
+                            message: i18n.t('errors.api.users.cannotChangeOwnRole')
+                        }));
                     }
 
-                    return dataProvider.User.findOne({role: 'Owner'}).then(function (owner) {
+                    return models.User.findOne({role: 'Owner'}).then(function (owner) {
                         if (contextUser.id !== owner.id) {
                             if (editedUserId === owner.id) {
                                 if (owner.related('roles').at(0).id !== roleId) {
-                                    return Promise.reject(new errors.NoPermissionError({message: i18n.t('errors.api.users.cannotChangeOwnersRole')}));
+                                    return Promise.reject(new errors.NoPermissionError({
+                                        message: i18n.t('errors.api.users.cannotChangeOwnersRole')
+                                    }));
                                 }
                             } else if (roleId !== contextRoleId) {
                                 return canThis(options.context).assign.role(role).then(function () {
@@ -185,24 +197,29 @@ users = {
          * @returns {Object} options
          */
         function doQuery(options) {
-            return dataProvider.User.edit(options.data.users[0], _.omit(options, ['data']));
+            return models.User.edit(options.data.users[0], _.omit(options, ['data']))
+                .then(function onModelResponse(model) {
+                    if (!model) {
+                        return Promise.reject(new errors.NotFoundError({
+                            message: i18n.t('errors.api.users.userNotFound')
+                        }));
+                    }
+
+                    return {
+                        users: [model.toJSON(options)]
+                    };
+                });
         }
 
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
-            utils.validate(docName, {opts: permittedOptions}),
+            apiUtils.validate(docName, {opts: permittedOptions}),
             handlePermissions,
-            utils.convertOptions(allowedIncludes),
+            apiUtils.convertOptions(allowedIncludes),
             doQuery
         ];
 
-        return pipeline(tasks, object, options).then(function formatResponse(result) {
-            if (result) {
-                return {users: [result.toJSON(options)]};
-            }
-
-            return Promise.reject(new errors.NotFoundError({message: i18n.t('errors.api.users.userNotFound')}));
-        });
+        return pipeline(tasks, object, options);
     },
 
     /**
@@ -237,15 +254,15 @@ users = {
          * @param {Object} options
          */
         function deleteUser(options) {
-            return dataProvider.Base.transaction(function (t) {
+            return models.Base.transaction(function (t) {
                 options.transacting = t;
 
                 return Promise.all([
-                    dataProvider.Accesstoken.destroyByUser(options),
-                    dataProvider.Refreshtoken.destroyByUser(options),
-                    dataProvider.Post.destroyByAuthor(options)
+                    models.Accesstoken.destroyByUser(options),
+                    models.Refreshtoken.destroyByUser(options),
+                    models.Post.destroyByAuthor(options)
                 ]).then(function () {
-                    return dataProvider.User.destroy(options);
+                    return models.User.destroy(options);
                 }).return(null);
             }).catch(function (err) {
                 return Promise.reject(new errors.NoPermissionError({
@@ -256,9 +273,9 @@ users = {
 
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
-            utils.validate(docName, {opts: utils.idDefaultOptions}),
+            apiUtils.validate(docName, {opts: apiUtils.idDefaultOptions}),
             handlePermissions,
-            utils.convertOptions(allowedIncludes),
+            apiUtils.convertOptions(allowedIncludes),
             deleteUser
         ];
 
@@ -276,7 +293,7 @@ users = {
         var tasks;
 
         function validateRequest() {
-            return utils.validate('password')(object, options)
+            return apiUtils.validate('password')(object, options)
                 .then(function (options) {
                     var data = options.data.password[0];
 
@@ -314,24 +331,26 @@ users = {
          * @returns {Object} options
          */
         function doQuery(options) {
-            return dataProvider.User.changePassword(
+            return models.User.changePassword(
                 options.data.password[0],
                 _.omit(options, ['data'])
-            );
+            ).then(function onModelResponse() {
+                return Promise.resolve({
+                    password: [{message: i18n.t('notices.api.users.pwdChangedSuccessfully')}]
+                });
+            });
         }
 
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
             validateRequest,
             handlePermissions,
-            utils.convertOptions(allowedIncludes),
+            apiUtils.convertOptions(allowedIncludes),
             doQuery
         ];
 
         // Pipeline calls each task passing the result of one to be the arguments for the next
-        return pipeline(tasks, object, options).then(function formatResponse() {
-            return Promise.resolve({password: [{message: i18n.t('notices.api.users.pwdChangedSuccessfully')}]});
-        });
+        return pipeline(tasks, object, options);
     },
 
     /**
@@ -350,7 +369,7 @@ users = {
          * @returns {Object} options
          */
         function handlePermissions(options) {
-            return dataProvider.Role.findOne({name: 'Owner'}).then(function (ownerRole) {
+            return models.Role.findOne({name: 'Owner'}).then(function (ownerRole) {
                 return canThis(options.context).assign.role(ownerRole);
             }).then(function () {
                 return options;
@@ -364,21 +383,26 @@ users = {
          * @returns {Object} options
          */
         function doQuery(options) {
-            return dataProvider.User.transferOwnership(options.data.owner[0], _.omit(options, ['data']));
+            return models.User.transferOwnership(options.data.owner[0], _.omit(options, ['data']))
+                .then(function onModelResponse(model) {
+                    // NOTE: model returns json object already
+                    // @TODO: why?
+                    return {
+                        users: model
+                    };
+                });
         }
 
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
-            utils.validate('owner'),
+            apiUtils.validate('owner'),
             handlePermissions,
-            utils.convertOptions(allowedIncludes),
+            apiUtils.convertOptions(allowedIncludes),
             doQuery
         ];
 
         // Pipeline calls each task passing the result of one to be the arguments for the next
-        return pipeline(tasks, object, options).then(function formatResult(result) {
-            return Promise.resolve({users: result});
-        });
+        return pipeline(tasks, object, options);
     }
 };
 

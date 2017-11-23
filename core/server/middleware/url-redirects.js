@@ -1,5 +1,5 @@
 var url = require('url'),
-    debug = require('debug')('ghost:url-redirects'),
+    debug = require('ghost-ignition').debug('url-redirects'),
     utils = require('../utils'),
     urlRedirects,
     _private = {};
@@ -9,6 +9,12 @@ _private.redirectUrl = function redirectUrl(options) {
         path = options.path,
         query = options.query,
         parts = url.parse(redirectTo);
+
+    // CASE: ensure we always add a trailing slash to reduce the number of redirects
+    // e.g. you are redirected from example.com/ghost to admin.example.com/ghost and Ghost would detect a missing slash and redirect you to /ghost/
+    if (!path.match(/\/$/)) {
+        path += '/';
+    }
 
     return url.format({
         protocol: parts.protocol,
@@ -20,20 +26,24 @@ _private.redirectUrl = function redirectUrl(options) {
 };
 
 _private.getAdminRedirectUrl = function getAdminRedirectUrl(options) {
-    var admimHostWithoutProtocol = utils.url.urlFor('admin', {cors: true}, true),
+    var blogHostWithProtocol = utils.url.urlFor('home', true),
         adminHostWithProtocol = utils.url.urlFor('admin', true),
+        adminHostWithoutProtocol = adminHostWithProtocol.replace(/(^\w+:|^)\/\//, ''),
+        blogHostWithoutProtocol = blogHostWithProtocol.replace(/(^\w+:|^)\/\//, ''),
         requestedHost = options.requestedHost,
         requestedUrl = options.requestedUrl,
         queryParameters = options.queryParameters,
         secure = options.secure;
 
-    debug('requestedUrl', requestedUrl);
-    debug('requestedHost', requestedHost);
-    debug('adminHost', adminHostWithProtocol);
+    debug('getAdminRedirectUrl', requestedHost, requestedUrl, adminHostWithProtocol);
 
-    // CASE: we always redirect to the correct admin url, if configured
-    if (!admimHostWithoutProtocol.match(new RegExp(requestedHost))) {
-        debug('redirect because host does not match');
+    // CASE: we only redirect the admin access if `admin.url` is configured
+    // If url and admin.url are not equal AND the requested host does not match, redirect.
+    // The first condition is the most important, because it ensures that you have a custom admin url configured,
+    // because we don't force an admin redirect if you have a custom url configured, but no admin url.
+    if (adminHostWithoutProtocol !== utils.url.urlJoin(blogHostWithoutProtocol, 'ghost/') &&
+        adminHostWithoutProtocol !== utils.url.urlJoin(requestedHost, utils.url.getSubdir(), 'ghost/')) {
+        debug('redirect because admin host does not match');
 
         return _private.redirectUrl({
             redirectTo: adminHostWithProtocol,
@@ -61,9 +71,7 @@ _private.getBlogRedirectUrl = function getBlogRedirectUrl(options) {
         queryParameters = options.queryParameters,
         secure = options.secure;
 
-    debug('requestedUrl', requestedUrl);
-    debug('requestedHost', requestedHost);
-    debug('blogHost', blogHostWithProtocol);
+    debug('getBlogRedirectUrl', requestedHost, requestedUrl, blogHostWithProtocol);
 
     // CASE: configured canonical url is HTTPS, but request is HTTP, redirect to requested host + SSL
     if (utils.url.isSSL(blogHostWithProtocol) && !secure) {
@@ -87,14 +95,14 @@ urlRedirects = function urlRedirects(req, res, next) {
     var redirectFn = res.isAdmin ? _private.getAdminRedirectUrl : _private.getBlogRedirectUrl,
         redirectUrl = redirectFn({
             requestedHost: req.get('host'),
-            requestedUrl: req.originalUrl || req.url,
+            requestedUrl: url.parse(req.originalUrl || req.url).pathname,
             queryParameters: req.query,
             secure: req.secure
         });
 
     if (redirectUrl) {
         debug('url redirect to: ' + redirectUrl);
-        return res.redirect(301, redirectUrl);
+        return utils.url.redirect301(res, redirectUrl);
     }
 
     debug('no url redirect');

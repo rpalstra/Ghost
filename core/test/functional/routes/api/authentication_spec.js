@@ -1,13 +1,13 @@
-var supertest     = require('supertest'),
-    should        = require('should'),
-    moment        = require('moment'),
-    testUtils     = require('../../../utils'),
-    user          = testUtils.DataGenerator.forModel.users[0],
-    userForKnex   = testUtils.DataGenerator.forKnex.users[0],
-    models        = require('../../../../../core/server/models'),
-    config        = require('../../../../../core/server/config'),
-    utils         = require('../../../../../core/server/utils'),
-    ghost         = testUtils.startGhost,
+var should = require('should'),
+    supertest = require('supertest'),
+    testUtils = require('../../../utils'),
+    moment = require('moment'),
+    user = testUtils.DataGenerator.forModel.users[0],
+    userForKnex = testUtils.DataGenerator.forKnex.users[0],
+    models = require('../../../../../core/server/models'),
+    config = require('../../../../../core/server/config'),
+    utils = require('../../../../../core/server/utils'),
+    ghost = testUtils.startGhost,
     request;
 
 describe('Authentication API', function () {
@@ -61,12 +61,26 @@ describe('Authentication API', function () {
                     return done(err);
                 }
                 should.not.exist(res.headers['x-cache-invalidate']);
-                var jsonResponse = res.body;
+                var jsonResponse = res.body,
+                    newAccessToken;
+
                 should.exist(jsonResponse.access_token);
                 should.exist(jsonResponse.refresh_token);
                 should.exist(jsonResponse.expires_in);
                 should.exist(jsonResponse.token_type);
-                done();
+
+                models.Accesstoken.findOne({
+                    token: jsonResponse.access_token
+                }).then(function (_newAccessToken) {
+                    newAccessToken = _newAccessToken;
+
+                    return models.Refreshtoken.findOne({
+                        token: jsonResponse.refresh_token
+                    });
+                }).then(function (newRefreshToken) {
+                    newAccessToken.get('issued_by').should.eql(newRefreshToken.id);
+                    done();
+                }).catch(done);
             });
     });
 
@@ -106,14 +120,14 @@ describe('Authentication API', function () {
                 client_secret: 'not_available'
             }).expect('Content-Type', /json/)
             .expect('Cache-Control', testUtils.cacheRules.private)
-            .expect(401)
+            .expect(422)
             .end(function (err, res) {
                 if (err) {
                     return done(err);
                 }
                 var jsonResponse = res.body;
                 should.exist(jsonResponse.errors[0].errorType);
-                jsonResponse.errors[0].errorType.should.eql('UnauthorizedError');
+                jsonResponse.errors[0].errorType.should.eql('ValidationError');
                 done();
             });
     });
@@ -170,6 +184,11 @@ describe('Authentication API', function () {
                                 token: accesstoken
                             }).then(function (oldAccessToken) {
                                 moment(oldAccessToken.get('expires')).diff(moment(), 'minutes').should.be.below(6);
+                                return models.Refreshtoken.findOne({
+                                    token: refreshToken
+                                });
+                            }).then(function (refreshTokenModel) {
+                                moment(refreshTokenModel.get('expires')).diff(moment(), 'month').should.be.above(5);
                                 done();
                             });
                         });
@@ -202,7 +221,7 @@ describe('Authentication API', function () {
 
     it('reset password', function (done) {
         models.Settings
-            .findOne({key: 'dbHash'})
+            .findOne({key: 'db_hash'})
             .then(function (response) {
                 var token = utils.tokens.resetToken.generateHash({
                     expires: Date.now() + (1000 * 60),
@@ -217,8 +236,8 @@ describe('Authentication API', function () {
                     .send({
                         passwordreset: [{
                             token: token,
-                            newPassword: 'abcdefgh',
-                            ne2Password: 'abcdefgh'
+                            newPassword: 'thisissupersafe',
+                            ne2Password: 'thisissupersafe'
                         }]
                     })
                     .expect('Content-Type', /json/)

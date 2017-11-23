@@ -1,13 +1,13 @@
-var testUtils       = require('../../utils'),
-    should          = require('should'),
-    sinon           = require('sinon'),
+var should = require('should'),
+    sinon = require('sinon'),
+    testUtils = require('../../utils'),
 
     // Stuff we are testing
-    SettingsModel   = require('../../../server/models/settings').Settings,
-    db              = require('../../../server/data/db'),
-    events          = require('../../../server/events'),
-    sandbox         = sinon.sandbox.create(),
-    context         = testUtils.context.admin;
+    SettingsModel = require('../../../server/models/settings').Settings,
+    db = require('../../../server/data/db'),
+    events = require('../../../server/events'),
+    context = testUtils.context.admin,
+    sandbox = sinon.sandbox.create();
 
 describe('Settings Model', function () {
     var eventSpy;
@@ -189,7 +189,7 @@ describe('Settings Model', function () {
             }).then(function (descriptionSetting) {
                 // Testing against the actual value in default-settings.json feels icky,
                 // but it's easier to fix the test if that ever changes than to mock out that behaviour
-                descriptionSetting.get('value').should.equal('Just a blogging platform.');
+                descriptionSetting.get('value').should.equal('The professional publishing platform');
                 done();
             }).catch(done);
         });

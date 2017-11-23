@@ -1,7 +1,7 @@
 // It's important to keep the requires absolutely minimal here,
 // As this cache is used in SO many other areas, we may open ourselves to
 // circular dependency bugs.
-var debug = require('debug')('ghost:settings:cache'),
+var debug = require('ghost-ignition').debug('settings:cache'),
     _ = require('lodash'),
     events = require('../events'),
     /**
@@ -20,12 +20,12 @@ var debug = require('debug')('ghost:settings:cache'),
  *
  * {
  *   type: core
- *   key: dbHash
+ *   key: db_hash
  *   value: ...
  * }
  *
  * But the settings cache does not allow requesting a value by type, only by key.
- * e.g. settingsCache.get('dbHash')
+ * e.g. settingsCache.get('db_hash')
  */
 module.exports = {
     /**
@@ -49,6 +49,11 @@ module.exports = {
 
         // Default behaviour is to try to resolve the value and return that
         try {
+            // CASE: if a string contains a number e.g. "1", JSON.parse will auto convert into integer
+            if (!isNaN(Number(settingsCache[key].value))) {
+                return settingsCache[key].value;
+            }
+
             return JSON.parse(settingsCache[key].value);
         } catch (err) {
             return settingsCache[key].value;

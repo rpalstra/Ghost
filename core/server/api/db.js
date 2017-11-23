@@ -1,14 +1,18 @@
 // # DB API
 // API for DB operations
-var Promise          = require('bluebird'),
-    exporter         = require('../data/export'),
-    importer         = require('../data/importer'),
-    backupDatabase   = require('../data/db/backup'),
-    models           = require('../models'),
-    errors           = require('../errors'),
-    utils            = require('./utils'),
-    pipeline         = require('../utils/pipeline'),
-    docName          = 'db',
+var Promise = require('bluebird'),
+    path = require('path'),
+    fs = require('fs'),
+    pipeline = require('../utils/pipeline'),
+    apiUtils = require('./utils'),
+    exporter = require('../data/export'),
+    importer = require('../data/importer'),
+    backupDatabase = require('../data/db/backup'),
+    models = require('../models'),
+    config = require('../config'),
+    errors = require('../errors'),
+    utilsUrl = require('../utils/url'),
+    docName = 'db',
     db;
 
 /**
@@ -17,6 +21,29 @@ var Promise          = require('bluebird'),
  * **See:** [API Methods](index.js.html#api%20methods)
  */
 db = {
+    /**
+     * ### Archive Content
+     * Generate the JSON to export - for Moya only
+     *
+     * @public
+     * @returns {Promise} Ghost Export JSON format
+     */
+    backupContent: function () {
+        var props = {
+            data: exporter.doExport(),
+            filename: exporter.fileName()
+        };
+
+        return Promise.props(props)
+            .then(function successMessage(exportResult) {
+                var filename = path.resolve(utilsUrl.urlJoin(config.get('paths').contentPath, 'data', exportResult.filename));
+
+                return Promise.promisify(fs.writeFile)(filename, JSON.stringify(exportResult.data))
+                    .then(function () {
+                        return filename;
+                    });
+            });
+    },
     /**
      * ### Export Content
      * Generate the JSON to export
@@ -40,7 +67,7 @@ db = {
         }
 
         tasks = [
-            utils.handlePermissions(docName, 'exportContent'),
+            apiUtils.handlePermissions(docName, 'exportContent'),
             exportContent
         ];
 
@@ -60,11 +87,14 @@ db = {
 
         function importContent(options) {
             return importer.importFromFile(options)
-                .return({db: []});
+                .then(function (response) {
+                    // NOTE: response can contain 2 objects if images are imported
+                    return {db: [], problems: response.length === 2 ? response[1].problems : response[0].problems};
+                });
         }
 
         tasks = [
-            utils.handlePermissions(docName, 'importContent'),
+            apiUtils.handlePermissions(docName, 'importContent'),
             importContent
         ];
 
@@ -86,21 +116,20 @@ db = {
 
         function deleteContent() {
             var collections = [
-                models.Subscriber.findAll(queryOpts),
                 models.Post.findAll(queryOpts),
                 models.Tag.findAll(queryOpts)
             ];
 
             return Promise.each(collections, function then(Collection) {
-                return Collection.invokeThen('destroy');
+                return Collection.invokeThen('destroy', queryOpts);
             }).return({db: []})
-            .catch(function (err) {
-                throw new errors.GhostError({err: err});
-            });
+                .catch(function (err) {
+                    throw new errors.GhostError({err: err});
+                });
         }
 
         tasks = [
-            utils.handlePermissions(docName, 'deleteAllContent'),
+            apiUtils.handlePermissions(docName, 'deleteAllContent'),
             backupDatabase,
             deleteContent
         ];

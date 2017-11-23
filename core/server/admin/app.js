@@ -1,19 +1,21 @@
-var debug = require('debug')('ghost:admin'),
-    config = require('../config'),
+var debug = require('ghost-ignition').debug('admin'),
     express = require('express'),
-    adminHbs = require('express-hbs').create(),
 
+    // App requires
+    config = require('../config'),
+    utils = require('../utils'),
+
+    // Middleware
     // Admin only middleware
-    redirectToSetup = require('../middleware/redirect-to-setup'),
+    adminMiddleware = require('./middleware'),
+    serveStatic = require('express').static,
 
-    // Global/shared middleware?
+    // Global/shared middleware
     cacheControl = require('../middleware/cache-control'),
     urlRedirects = require('../middleware/url-redirects'),
     errorHandler = require('../middleware/error-handler'),
     maintenance = require('../middleware/maintenance'),
-    prettyURLs = require('../middleware/pretty-urls'),
-    serveStatic = require('express').static,
-    utils = require('../utils');
+    prettyURLs = require('../middleware/pretty-urls');
 
 module.exports = function setupAdminApp() {
     debug('Admin setup start');
@@ -27,14 +29,6 @@ module.exports = function setupAdminApp() {
         next();
     });
 
-    // @TODO replace all this with serving ember's index.html
-    // Create a hbs instance for admin and init view engine
-    adminApp.set('view engine', 'hbs');
-    adminApp.set('views', config.get('paths').adminViews);
-    adminApp.engine('hbs', adminHbs.express3({}));
-    // Register our `asset` helper
-    adminHbs.registerHelper('asset', require('../helpers/asset'));
-
     // Admin assets
     // @TODO ensure this gets a local 404 error handler
     configMaxAge = config.get('caching:admin:maxAge');
@@ -45,6 +39,13 @@ module.exports = function setupAdminApp() {
 
     // Service Worker for offline support
     adminApp.get(/^\/(sw.js|sw-registration.js)$/, require('./serviceworker'));
+
+    // Ember CLI's live-reload script
+    if (config.get('env') === 'development') {
+        adminApp.get('/ember-cli-live-reload.js', function (req, res) {
+            res.redirect('http://localhost:4200' + utils.url.getSubdir() + '/ghost/ember-cli-live-reload.js');
+        });
+    }
 
     // Render error page in case of maintenance
     adminApp.use(maintenance);
@@ -61,7 +62,7 @@ module.exports = function setupAdminApp() {
     // Admin is currently set to not be cached at all
     adminApp.use(cacheControl('private'));
     // Special redirects for the admin (these should have their own cache-control headers)
-    adminApp.use(redirectToSetup);
+    adminApp.use(adminMiddleware);
 
     // Finally, routing
     adminApp.get('*', require('./controller'));

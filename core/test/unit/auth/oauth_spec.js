@@ -1,5 +1,5 @@
-var sinon = require('sinon'),
-    should = require('should'),
+var should = require('should'),
+    sinon = require('sinon'),
     Promise = require('bluebird'),
     passport = require('passport'),
     testUtils = require('../../utils'),
@@ -7,22 +7,23 @@ var sinon = require('sinon'),
     authUtils = require('../../../server/auth/utils'),
     spamPrevention = require('../../../server/middleware/api/spam-prevention'),
     errors = require('../../../server/errors'),
-    models = require('../../../server/models');
+    models = require('../../../server/models'),
+
+    sandbox = sinon.sandbox.create();
 
 describe('OAuth', function () {
-    var next, req, res, sandbox;
+    var next, req, res;
 
     before(function () {
         models.init();
     });
 
     beforeEach(function () {
-        sandbox = sinon.sandbox.create();
         req = {};
         res = {};
         next = sandbox.spy();
 
-        sandbox.stub(spamPrevention.userLogin, 'reset');
+        sandbox.stub(spamPrevention.userLogin(), 'reset');
     });
 
     afterEach(function () {
@@ -49,13 +50,11 @@ describe('OAuth', function () {
             req.body.grant_type = 'password';
             req.body.username = 'username';
             req.body.password = 'password';
+            req.client = {
+                id: 1
+            };
             res.setHeader = {};
             res.end = {};
-
-            sandbox.stub(models.Client, 'findOne')
-                .withArgs({slug: 'test'}).returns(new Promise.resolve({
-                id: 1
-            }));
 
             sandbox.stub(models.User, 'check')
                 .withArgs({email: 'username', password: 'password'}).returns(new Promise.resolve({
@@ -69,7 +68,8 @@ describe('OAuth', function () {
                     expires_in: Date.now() + 1000
                 }));
 
-            sandbox.stub(res, 'setHeader', function () {});
+            sandbox.stub(res, 'setHeader', function () {
+            });
 
             sandbox.stub(res, 'end', function (json) {
                 try {
@@ -80,7 +80,7 @@ describe('OAuth', function () {
                     json.should.have.property('expires_in');
                     json.should.have.property('token_type', 'Bearer');
                     next.called.should.eql(false);
-                    spamPrevention.userLogin.reset.called.should.eql(true);
+                    spamPrevention.userLogin().reset.called.should.eql(true);
                     done();
                 } catch (err) {
                     done(err);
@@ -103,11 +103,8 @@ describe('OAuth', function () {
             res.setHeader = {};
             res.end = {};
 
-            sandbox.stub(models.Client, 'findOne')
-                .withArgs({slug: 'test'}).returns(new Promise.resolve());
-
             oAuth.generateAccessToken(req, res, function (err) {
-                err.errorType.should.eql('NoPermissionError');
+                err.errorType.should.eql('UnauthorizedError');
                 done();
             });
         });
@@ -122,13 +119,11 @@ describe('OAuth', function () {
             req.body.grant_type = 'password';
             req.body.username = 'username';
             req.body.password = 'password';
+            req.client = {
+                id: 1
+            };
             res.setHeader = {};
             res.end = {};
-
-            sandbox.stub(models.Client, 'findOne')
-                .withArgs({slug: 'test'}).returns(new Promise.resolve({
-                id: 1
-            }));
 
             sandbox.stub(models.User, 'check')
                 .withArgs({email: 'username', password: 'password'}).returns(new Promise.resolve({
@@ -185,7 +180,8 @@ describe('OAuth', function () {
                     expires_in: Date.now() + 1000
                 }));
 
-            sandbox.stub(res, 'setHeader', function () {});
+            sandbox.stub(res, 'setHeader', function () {
+            });
 
             sandbox.stub(res, 'end', function (json) {
                 try {
@@ -273,13 +269,12 @@ describe('OAuth', function () {
                 }
             }));
 
-            sandbox.stub(authUtils, 'createTokens')
-                .returns(new Promise.reject({
-                    message: 'DB error'
-                }));
+            sandbox.stub(authUtils, 'createTokens', function () {
+                return Promise.reject(new Error('DB error'));
+            });
 
             oAuth.generateAccessToken(req, res, function (err) {
-                err.message.should.eql('DB error');
+                err.stack.should.containEql('DB error');
                 done();
             });
         });
@@ -346,7 +341,7 @@ describe('OAuth', function () {
 
             sandbox.stub(passport, 'authenticate', function (name, options, onSuccess) {
                 return function () {
-                    onSuccess(new Error('validation error'));
+                    onSuccess(new errors.UnauthorizedError());
                 };
             });
 

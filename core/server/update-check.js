@@ -7,7 +7,7 @@
 //
 // The data collected is as follows:
 //
-// - blog id - a hash of the blog hostname, pathname and dbHash. No identifiable info is stored.
+// - blog id - a hash of the blog hostname, pathname and db_hash. No identifiable info is stored.
 // - ghost version
 // - node version
 // - npm version
@@ -23,6 +23,7 @@
 var crypto   = require('crypto'),
     exec     = require('child_process').exec,
     https    = require('https'),
+    http    = require('http'),
     moment   = require('moment'),
     semver   = require('semver'),
     Promise  = require('bluebird'),
@@ -36,18 +37,18 @@ var crypto   = require('crypto'),
     i18n     = require('./i18n'),
     currentVersion = require('./utils/ghost-version').full,
     internal = {context: {internal: true}},
-    checkEndpoint = 'updates.ghost.org';
+    checkEndpoint = config.get('updateCheckUrl') || 'https://updates.ghost.org';
 
 function updateCheckError(err) {
     err = errors.utils.deserialize(err);
 
     api.settings.edit(
-        {settings: [{key: 'nextUpdateCheck', value: Math.round(Date.now() / 1000 + 24 * 3600)}]},
+        {settings: [{key: 'next_update_check', value: Math.round(Date.now() / 1000 + 24 * 3600)}]},
         internal
     );
 
     err.context = i18n.t('errors.update-check.checkingForUpdatesFailed.error');
-    err.help = i18n.t('errors.update-check.checkingForUpdatesFailed.help', {url: 'http://support.ghost.org'});
+    err.help = i18n.t('errors.update-check.checkingForUpdatesFailed.help', {url: 'https://docs.ghost.org/v1'});
     logging.error(err);
 }
 
@@ -62,18 +63,18 @@ function createCustomNotification(message) {
     }
 
     var notification = {
-        status: 'alert',
-        type: 'info',
-        custom: true,
-        uuid: message.id,
-        dismissible: true,
-        message: message.content
-    },
-    getAllNotifications = api.notifications.browse({context: {internal: true}}),
-    getSeenNotifications = api.settings.read(_.extend({key: 'seenNotifications'}, internal));
+            status: 'alert',
+            type: 'info',
+            custom: true,
+            uuid: message.id,
+            dismissible: true,
+            message: message.content
+        },
+        getAllNotifications = api.notifications.browse({context: {internal: true}}),
+        getSeenNotifications = api.settings.read(_.extend({key: 'seen_notifications'}, internal));
 
     return Promise.join(getAllNotifications, getSeenNotifications, function joined(all, seen) {
-        var isSeen      = _.includes(JSON.parse(seen.settings[0].value || []), notification.id),
+        var isSeen = _.includes(JSON.parse(seen.settings[0].value || []), notification.id),
             isDuplicate = _.some(all.notifications, {message: notification.message});
 
         if (!isSeen && !isDuplicate) {
@@ -96,9 +97,9 @@ function updateCheckData() {
         mailConfig.transport);
 
     return Promise.props({
-        hash: api.settings.read(_.extend({key: 'dbHash'}, internal)).reflect(),
-        theme: api.settings.read(_.extend({key: 'activeTheme'}, internal)).reflect(),
-        apps: api.settings.read(_.extend({key: 'activeApps'}, internal))
+        hash: api.settings.read(_.extend({key: 'db_hash'}, internal)).reflect(),
+        theme: api.settings.read(_.extend({key: 'active_theme'}, internal)).reflect(),
+        apps: api.settings.read(_.extend({key: 'active_apps'}, internal))
             .then(function (response) {
                 var apps = response.settings[0];
 
@@ -136,7 +137,9 @@ function updateCheckRequest() {
     return updateCheckData().then(function then(reqData) {
         var resData = '',
             headers,
-            req;
+            req,
+            requestHandler,
+            parsedUrl;
 
         reqData = JSON.stringify(reqData);
 
@@ -146,8 +149,12 @@ function updateCheckRequest() {
         };
 
         return new Promise(function p(resolve, reject) {
-            req = https.request({
-                hostname: checkEndpoint,
+            requestHandler = checkEndpoint.indexOf('https') === 0 ? https : http;
+            parsedUrl = url.parse(checkEndpoint);
+
+            req = requestHandler.request({
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port,
                 method: 'POST',
                 headers: headers
             }, function handler(res) {
@@ -204,14 +211,14 @@ function updateCheckRequest() {
  */
 function updateCheckResponse(response) {
     return Promise.all([
-        api.settings.edit({settings: [{key: 'nextUpdateCheck', value: response.next_check}]}, internal),
-        api.settings.edit({settings: [{key: 'displayUpdateNotification', value: response.version}]}, internal)
+        api.settings.edit({settings: [{key: 'next_update_check', value: response.next_check}]}, internal),
+        api.settings.edit({settings: [{key: 'display_update_notification', value: response.version}]}, internal)
     ]).then(function () {
         var messages = response.messages || [];
 
         /**
          * by default the update check service returns messages: []
-         * but the latest release version get's stored anyway, because we adding the `displayUpdateNotification` ^
+         * but the latest release version get's stored anyway, because we adding the `display_update_notification` ^
          */
         return Promise.map(messages, createCustomNotification);
     });
@@ -221,12 +228,12 @@ function updateCheck() {
     if (config.isPrivacyDisabled('useUpdateCheck')) {
         return Promise.resolve();
     } else {
-        return api.settings.read(_.extend({key: 'nextUpdateCheck'}, internal)).then(function then(result) {
+        return api.settings.read(_.extend({key: 'next_update_check'}, internal)).then(function then(result) {
             var nextUpdateCheck = result.settings[0];
 
             if (nextUpdateCheck && nextUpdateCheck.value && nextUpdateCheck.value > moment().unix()) {
                 // It's not time to check yet
-                return;
+                return; // eslint-disable-line no-useless-return
             } else {
                 // We need to do a check
                 return updateCheckRequest()
@@ -238,10 +245,11 @@ function updateCheck() {
 }
 
 function showUpdateNotification() {
-    return api.settings.read(_.extend({key: 'displayUpdateNotification'}, internal)).then(function then(response) {
+    return api.settings.read(_.extend({key: 'display_update_notification'}, internal)).then(function then(response) {
         var display = response.settings[0];
 
-        if (display && display.value && currentVersion && semver.gt(display.value, currentVersion)) {
+        // @TODO: We only show minor/major releases. This is a temporary fix. #5071 is coming soon.
+        if (display && display.value && currentVersion && semver.gt(display.value, currentVersion) && semver.patch(display.value) === 0) {
             return display.value;
         }
 

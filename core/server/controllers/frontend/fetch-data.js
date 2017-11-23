@@ -5,7 +5,7 @@
 var api = require('../../api'),
     _   = require('lodash'),
     Promise = require('bluebird'),
-    settingsCache = require('../../settings/cache'),
+    themes = require('../../themes'),
     queryDefaults,
     defaultPostQuery = {};
 
@@ -33,7 +33,7 @@ _.extend(defaultPostQuery, queryDefaults, {
 function fetchPostsPerPage(options) {
     options = options || {};
 
-    var postsPerPage = parseInt(settingsCache.get('postsPerPage'));
+    var postsPerPage = parseInt(themes.getActive().config('posts_per_page'));
 
     // No negative posts per page, must be number
     if (!isNaN(postsPerPage) && postsPerPage > 0) {
@@ -86,7 +86,7 @@ function processQuery(query, slugParam) {
 function fetchData(channelOptions) {
     // @TODO improve this further
     var pageOptions = channelOptions.isRSS ?
-        {options: channelOptions.postOptions} : fetchPostsPerPage(channelOptions.postOptions),
+            {options: channelOptions.postOptions} : fetchPostsPerPage(channelOptions.postOptions),
         postQuery,
         props = {};
 

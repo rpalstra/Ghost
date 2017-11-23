@@ -4,17 +4,22 @@
         "corePath": "core/",
         "clientAssets": "core/built/assets",
         "helperTemplates": "core/server/helpers/tpl/",
-        "adminViews": "core/server/views/",
+        "adminViews": "core/server/admin/views/",
+        "defaultViews": "core/server/views/",
         "internalAppPath": "core/server/apps/",
-        "internalStoragePath": "core/server/storage/",
-        "internalSchedulingPath": "core/server/scheduling/",
-        "migrationPath": "core/server/data/migrations"
+        "internalStoragePath": "core/server/adapters/storage/",
+        "internalSchedulingPath": "core/server/adapters/scheduling/",
+        "migrationPath": "core/server/data/migrations",
+        "publicFilePath": "core/server/public"
     },
-    "internalApps": [
-        "private-blogging",
-        "subscribers",
-        "amp"
-    ],
+    "apps": {
+        "internal": [
+            "private-blogging",
+            "subscribers",
+            "amp",
+            "default-cards"
+        ]
+    },
     "routeKeywords": {
         "tag": "tag",
         "author": "author",
@@ -22,10 +27,11 @@
         "preview": "p",
         "private": "private",
         "subscribe": "subscribe",
-        "amp": "amp"
+        "amp": "amp",
+        "primaryTagFallback": "all"
     },
     "slugs": {
-        "reserved": ["admin", "app", "apps", "archive", "archives", "categories",
+        "reserved": ["admin", "app", "apps", "categories",
             "category", "dashboard", "feed", "ghost-admin", "login", "logout",
             "page", "pages", "post", "posts", "public", "register", "setup",
             "signin", "signout", "signup", "user", "users", "wp-admin", "wp-login"],
@@ -46,21 +52,21 @@
         },
         "db": {
             "extensions": [".json", ".zip"],
-            "contentTypes": ["application/octet-stream", "application/json", "application/zip", "application/x-zip-compressed"]
+            "contentTypes": ["text/plain", "application/octet-stream", "application/json", "application/zip", "application/x-zip-compressed"]
         },
         "themes": {
             "extensions": [".zip"],
             "contentTypes": ["application/zip", "application/x-zip-compressed", "application/octet-stream"]
-        }
-    },
-    "storage": {
-        "active": {
-            "themes": "local-file-store"
+        },
+        "redirects": {
+            "extensions": [".json"],
+            "contentTypes": ["text/plain", "application/octet-stream", "application/json"]
         }
     },
     "times": {
         "cannotScheduleAPostBeforeInMinutes": 2,
-        "publishAPostBySchedulerToleranceInMinutes": 2
+        "publishAPostBySchedulerToleranceInMinutes": 2,
+        "getImageSizeTimeoutInMS": 5000
     },
     "maintenance": {
         "enabled": false

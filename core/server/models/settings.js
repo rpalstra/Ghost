@@ -2,12 +2,12 @@ var Settings,
     Promise        = require('bluebird'),
     _              = require('lodash'),
     uuid           = require('uuid'),
+    crypto         = require('crypto'),
     ghostBookshelf = require('./base'),
     errors         = require('../errors'),
     events         = require('../events'),
     i18n           = require('../i18n'),
     validation     = require('../data/validation'),
-    themes         = require('../themes'),
 
     internalContext = {context: {internal: true}},
 
@@ -20,7 +20,8 @@ function parseDefaultSettings() {
     var defaultSettingsInCategories = require('../data/schema/').defaultSettings,
         defaultSettingsFlattened = {},
         dynamicDefault = {
-            dbHash: uuid.v4()
+            db_hash: uuid.v4(),
+            public_hash: crypto.randomBytes(15).toString('hex')
         };
 
     _.each(defaultSettingsInCategories, function each(settings, categoryName) {
@@ -58,23 +59,23 @@ Settings = ghostBookshelf.Model.extend({
         };
     },
 
-    emitChange: function emitChange(event) {
-        events.emit('settings' + '.' + event, this);
+    emitChange: function emitChange(event, options) {
+        events.emit('settings' + '.' + event, this, options);
     },
 
-    onDestroyed: function onDestroyed(model) {
+    onDestroyed: function onDestroyed(model, response, options) {
         model.emitChange('deleted');
-        model.emitChange(model.attributes.key + '.' + 'deleted');
+        model.emitChange(model.attributes.key + '.' + 'deleted', options);
     },
 
-    onCreated: function onCreated(model) {
+    onCreated: function onCreated(model, response, options) {
         model.emitChange('added');
-        model.emitChange(model.attributes.key + '.' + 'added');
+        model.emitChange(model.attributes.key + '.' + 'added', options);
     },
 
-    onUpdated: function onUpdated(model) {
+    onUpdated: function onUpdated(model, response, options) {
         model.emitChange('edited');
-        model.emitChange(model.attributes.key + '.' + 'edited');
+        model.emitChange(model.attributes.key + '.' + 'edited', options);
     },
 
     onValidate: function onValidate() {
@@ -83,14 +84,6 @@ Settings = ghostBookshelf.Model.extend({
 
         return validation.validateSchema(self.tableName, setting).then(function then() {
             return validation.validateSettings(getDefaultSettings(), self);
-        }).then(function () {
-            var themeName = setting.value || '';
-
-            if (setting.key !== 'activeTheme') {
-                return;
-            }
-
-            return themes.validate.activeTheme(themeName);
         });
     }
 }, {
@@ -125,22 +118,27 @@ Settings = ghostBookshelf.Model.extend({
             item = self.filterData(item);
 
             return Settings.forge({key: item.key}).fetch(options).then(function then(setting) {
-                var saveData = {};
-
                 if (setting) {
-                    if (item.hasOwnProperty('value')) {
-                        saveData.value = item.value;
-                    }
-                    // Internal context can overwrite type (for fixture migrations)
-                    if (options.context && options.context.internal && item.hasOwnProperty('type')) {
-                        saveData.type = item.type;
-                    }
                     // it's allowed to edit all attributes in case of importing/migrating
                     if (options.importing) {
-                        saveData = item;
-                    }
+                        return setting.save(item, options);
+                    } else {
+                        // If we have a value, set it.
+                        if (item.hasOwnProperty('value')) {
+                            setting.set('value', item.value);
+                        }
+                        // Internal context can overwrite type (for fixture migrations)
+                        if (options.context && options.context.internal && item.hasOwnProperty('type')) {
+                            setting.set('type', item.type);
+                        }
 
-                    return setting.save(saveData, options);
+                        // If anything has changed, save the updated model
+                        if (setting.hasChanged()) {
+                            return setting.save(null, options);
+                        }
+
+                        return setting;
+                    }
                 }
 
                 return Promise.reject(new errors.NotFoundError({message: i18n.t('errors.models.settings.unableToFindSetting', {key: item.key})}));

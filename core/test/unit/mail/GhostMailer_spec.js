@@ -1,11 +1,11 @@
-var should          = require('should'),
-    Promise         = require('bluebird'),
-    sinon           = require('sinon'),
-    mail            = require('../../../server/mail'),
-    settingsCache   = require('../../../server/settings/cache'),
-    configUtils     = require('../../utils/configUtils'),
-    i18n            = require('../../../server/i18n'),
-    sandbox         = sinon.sandbox.create(),
+var should = require('should'),
+    sinon = require('sinon'),
+    Promise = require('bluebird'),
+    mail = require('../../../server/mail'),
+    settingsCache = require('../../../server/settings/cache'),
+    configUtils = require('../../utils/configUtils'),
+    i18n = require('../../../server/i18n'),
+    sandbox = sinon.sandbox.create(),
     mailer,
 
     // Mock SMTP config
@@ -96,7 +96,7 @@ describe('Mail: Ghostmailer', function () {
         mailer.send(mailDataNoServer).then(function () {
             done(new Error('Stub did not error'));
         }).catch(function (error) {
-            error.message.should.eql('Error: Stub made a boo boo :(');
+            error.message.should.containEql('Stub made a boo boo :(');
             done();
         }).catch(done);
     });
@@ -113,7 +113,7 @@ describe('Mail: Ghostmailer', function () {
             descriptors.forEach(function (d) {
                 d.isFulfilled().should.be.false();
                 d.reason().should.be.an.instanceOf(Error);
-                d.reason().message.should.eql('Error: Incomplete message data.');
+                d.reason().message.should.eql('Incomplete message data.');
             });
             done();
         }).catch(done);
@@ -136,7 +136,7 @@ describe('Mail: Ghostmailer', function () {
             mailer.send(mailDataNoDomain).then(function () {
                 done(new Error('Error message not shown.'));
             }, function (error) {
-                error.message.should.startWith('Error: Failed to send email');
+                error.message.should.startWith('Failed to send email.');
                 done();
             }).catch(done);
         });
@@ -147,7 +147,7 @@ describe('Mail: Ghostmailer', function () {
             mailer.send(mailDataNoServer).then(function () {
                 done(new Error('Error message not shown.'));
             }, function (error) {
-                error.message.should.eql('Error: Failed to send email.');
+                error.message.should.eql('Failed to send email.');
                 done();
             }).catch(done);
         });
@@ -158,7 +158,7 @@ describe('Mail: Ghostmailer', function () {
             mailer.send(mailDataIncomplete).then(function () {
                 done(new Error('Error message not shown.'));
             }, function (error) {
-                error.message.should.eql('Error: Incomplete message data.');
+                error.message.should.eql('Incomplete message data.');
                 done();
             }).catch(done);
         });
@@ -195,51 +195,48 @@ describe('Mail: Ghostmailer', function () {
             // Strip Port
             configUtils.set({url: 'http://default.com:2368/', mail: {from: null}});
             mailer.from().should.equal('"Test" <ghost@default.com>');
+
+            settingsCache.get.restore();
+            sandbox.stub(settingsCache, 'get').returns('Test"');
+
+            // Escape title
+            configUtils.set({url: 'http://default.com:2368/', mail: {from: null}});
+            mailer.from().should.equal('"Test\\"" <ghost@default.com>');
         });
 
-        it('should use mail.from if both from and fromaddress are present', function () {
+        it('should use mail.from', function () {
             // Standard domain
-            configUtils.set({mail: {from: '"bar" <from@default.com>', fromaddress: '"Qux" <fa@default.com>'}});
+            configUtils.set({mail: {from: '"bar" <from@default.com>'}});
 
             mailer = new mail.GhostMailer();
 
             mailer.from().should.equal('"bar" <from@default.com>');
         });
 
-        it('should attach blog title if from or fromaddress are only email addresses', function () {
+        it('should attach blog title', function () {
             sandbox.stub(settingsCache, 'get').returns('Test');
 
-            // from and fromaddress are both set
-            configUtils.set({mail: {from: 'from@default.com', fromaddress: 'fa@default.com'}});
+            configUtils.set({mail: {from: 'from@default.com'}});
 
             mailer = new mail.GhostMailer();
 
             mailer.from().should.equal('"Test" <from@default.com>');
 
             // only from set
-            configUtils.set({mail: {from: 'from@default.com', fromaddress: null}});
+            configUtils.set({mail: {from: 'from@default.com'}});
             mailer.from().should.equal('"Test" <from@default.com>');
-
-            // only fromaddress set
-            configUtils.set({mail: {from: null, fromaddress: 'fa@default.com'}});
-            mailer.from().should.equal('"Test" <fa@default.com>');
         });
 
         it('should ignore theme title if from address is Title <email@address.com> format', function () {
-            // from and fromaddress are both set
-            configUtils.set({mail: {from: '"R2D2" <from@default.com>', fromaddress: '"C3PO" <fa@default.com>'}});
+            configUtils.set({mail: {from: '"R2D2" <from@default.com>'}});
 
             mailer = new mail.GhostMailer();
 
             mailer.from().should.equal('"R2D2" <from@default.com>');
 
             // only from set
-            configUtils.set({mail: {from: '"R2D2" <from@default.com>', fromaddress: null}});
+            configUtils.set({mail: {from: '"R2D2" <from@default.com>'}});
             mailer.from().should.equal('"R2D2" <from@default.com>');
-
-            // only fromaddress set
-            configUtils.set({mail: {from: null, fromaddress: '"C3PO" <fa@default.com>'}});
-            mailer.from().should.equal('"C3PO" <fa@default.com>');
         });
 
         it('should use default title if not theme title is provided', function () {

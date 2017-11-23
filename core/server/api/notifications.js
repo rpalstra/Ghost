@@ -1,16 +1,15 @@
 // # Notifications API
 // RESTful API for creating notifications
-var Promise            = require('bluebird'),
-    _                  = require('lodash'),
-    ObjectId           = require('bson-objectid'),
-    permissions        = require('../permissions'),
-    errors             = require('../errors'),
-    settings           = require('./settings'),
-    utils              = require('./utils'),
-    pipeline           = require('../utils/pipeline'),
-    canThis            = permissions.canThis,
-    i18n               = require('../i18n'),
-
+var Promise = require('bluebird'),
+    _ = require('lodash'),
+    ObjectId = require('bson-objectid'),
+    pipeline = require('../utils/pipeline'),
+    permissions = require('../permissions'),
+    canThis = permissions.canThis,
+    apiUtils = require('./utils'),
+    errors = require('../errors'),
+    i18n = require('../i18n'),
+    settingsAPI = require('./settings'),
     // Holds the persistent notifications
     notificationsStore = [],
     notifications;
@@ -94,7 +93,7 @@ notifications = {
                     id: ObjectId.generate()
                 });
 
-                existingNotification = _.find(notificationsStore, {message:notification.message});
+                existingNotification = _.find(notificationsStore, {message: notification.message});
 
                 if (!existingNotification) {
                     notificationsStore.push(notification);
@@ -104,18 +103,18 @@ notifications = {
                 }
             });
 
-            return addedNotifications;
+            return {
+                notifications: addedNotifications
+            };
         }
 
         tasks = [
-            utils.validate('notifications'),
+            apiUtils.validate('notifications'),
             handlePermissions,
             saveNotifications
         ];
 
-        return pipeline(tasks, object, options).then(function formatResponse(result) {
-            return {notifications: result};
-        });
+        return pipeline(tasks, object, options);
     },
 
     /**
@@ -129,16 +128,16 @@ notifications = {
         var tasks;
 
         /**
-         * Adds the id of notification to "seenNotifications" array.
+         * Adds the id of notification to "seen_notifications" array.
          * @param {Object} notification
          * @return {*|Promise}
          */
         function markAsSeen(notification) {
             var context = {internal: true};
-            return settings.read({key: 'seenNotifications', context: context}).then(function then(response) {
+            return settingsAPI.read({key: 'seen_notifications', context: context}).then(function then(response) {
                 var seenNotifications = JSON.parse(response.settings[0].value);
                 seenNotifications = _.uniqBy(seenNotifications.concat([notification.id]));
-                return settings.edit({settings: [{key: 'seenNotifications', value: seenNotifications}]}, {context: context});
+                return settingsAPI.edit({settings: [{key: 'seen_notifications', value: seenNotifications}]}, {context: context});
             });
         }
 
@@ -181,7 +180,7 @@ notifications = {
         }
 
         tasks = [
-            utils.validate('notifications', {opts: utils.idDefaultOptions}),
+            apiUtils.validate('notifications', {opts: apiUtils.idDefaultOptions}),
             handlePermissions,
             destroyNotification
         ];

@@ -1,25 +1,28 @@
 var fs = require('fs-extra'),
     _ = require('lodash'),
+    express = require('express'),
+    url = require('url'),
+    path = require('path'),
+    debug = require('ghost-ignition').debug('custom-redirects'),
     config = require('../config'),
     errors = require('../errors'),
-    utils = require('../utils');
+    logging = require('../logging'),
+    i18n = require('../i18n'),
+    globalUtils = require('../utils'),
+    customRedirectsRouter,
+    _private = {};
 
-/**
- * you can extend Ghost with a custom redirects file
- * see https://github.com/TryGhost/Ghost/issues/7707
- * file loads synchronously, because we need to register the routes before anything else
- */
-module.exports = function redirects(blogApp) {
+_private.registerRoutes = function registerRoutes() {
+    debug('redirects loading');
+
+    customRedirectsRouter = express.Router();
+
     try {
-        var redirects = fs.readFileSync(config.getContentPath('data') + '/redirects.json', 'utf-8');
+        var redirects = fs.readFileSync(path.join(config.getContentPath('data'), 'redirects.json'), 'utf-8');
         redirects = JSON.parse(redirects);
+        globalUtils.validateRedirects(redirects);
 
         _.each(redirects, function (redirect) {
-            if (!redirect.from || !redirect.to) {
-                errors.logError(null, 'Your redirects.json file is in a wrong format');
-                return;
-            }
-
             /**
              * always delete trailing slashes, doesn't matter if regex or not
              * Example:
@@ -34,19 +37,51 @@ module.exports = function redirects(blogApp) {
                 redirect.from += '\/?$';
             }
 
-            blogApp.get(new RegExp(redirect.from), function (req, res) {
-                var maxAge = redirect.permanent ? utils.ONE_YEAR_S : 0;
+            debug('register', redirect.from);
+            customRedirectsRouter.get(new RegExp(redirect.from), function (req, res) {
+                var maxAge = redirect.permanent ? config.get('caching:customRedirects:maxAge') : 0,
+                    parsedUrl = url.parse(req.originalUrl);
 
                 res.set({
                     'Cache-Control': 'public, max-age=' + maxAge
                 });
 
-                res.redirect(redirect.permanent ? 301 : 302, req.originalUrl.replace(new RegExp(redirect.from), redirect.to));
+                res.redirect(redirect.permanent ? 301 : 302, url.format({
+                    pathname: parsedUrl.pathname.replace(new RegExp(redirect.from), redirect.to),
+                    search: parsedUrl.search
+                }));
             });
         });
     } catch (err) {
-        if (err.code !== 'ENOENT') {
-            errors.logAndThrowError(err, 'Your redirects.json is broken.', 'Check if your JSON is valid.');
+        if (errors.utils.isIgnitionError(err)) {
+            logging.error(err);
+        } else if (err.code !== 'ENOENT') {
+            logging.error(new errors.IncorrectUsageError({
+                message: i18n.t('errors.middleware.redirects.register'),
+                context: err.message,
+                help: 'https://docs.ghost.org/docs/redirects'
+            }));
         }
     }
+
+    debug('redirects loaded');
+};
+
+/**
+ * - you can extend Ghost with a custom redirects file
+ * - see https://github.com/TryGhost/Ghost/issues/7707 and https://docs.ghost.org/v1/docs/redirects
+ * - file loads synchronously, because we need to register the routes before anything else
+ */
+exports.use = function use(siteApp) {
+    _private.registerRoutes();
+
+    // Recommended approach by express, see https://github.com/expressjs/express/issues/2596#issuecomment-81353034.
+    // As soon as the express router get's re-instantiated, the old router instance is not used anymore.
+    siteApp.use(function (req, res, next) {
+        customRedirectsRouter(req, res, next);
+    });
+};
+
+exports.reload = function reload() {
+    _private.registerRoutes();
 };

@@ -1,11 +1,8 @@
-
-var sinon = require('sinon'),
-    should = require('should'),
+var should = require('should'), // jshint ignore:line
+    sinon = require('sinon'),
     getTitle = require('../../../server/data/meta/title'),
     settingsCache = require('../../../server/settings/cache'),
     sandbox = sinon.sandbox.create();
-
-should.equal(true, true);
 
 describe('getTitle', function () {
     var localSettingsCache = {};
@@ -56,14 +53,14 @@ describe('getTitle', function () {
                 name: 'Author Name'
             }
         }, {
-            context: ['author'],
+            context: ['author', 'paged'],
             pagination: {
                 total: 40,
                 page: 3
             }
         });
 
-        title.should.equal('Author Name - Page 3 - My blog title 2');
+        title.should.equal('Author Name - My blog title 2 (Page 3)');
     });
 
     it('should return tag name - blog title if on data tag page no meta_title', function () {
@@ -78,7 +75,7 @@ describe('getTitle', function () {
         title.should.equal('Tag Name - My blog title 3');
     });
 
-    it('should return tag name - page - blog title if on data tag page no meta_title', function () {
+    it('should return tag name - blog title if on data tag page no meta_title (Page #)', function () {
         localSettingsCache.title = 'My blog title 3';
 
         var title = getTitle({
@@ -86,14 +83,14 @@ describe('getTitle', function () {
                 name: 'Tag Name'
             }
         }, {
-            context: ['tag'],
+            context: ['tag', 'paged'],
             pagination: {
                 total: 40,
                 page: 39
             }
         });
 
-        title.should.equal('Tag Name - Page 39 - My blog title 3');
+        title.should.equal('Tag Name - My blog title 3 (Page 39)');
     });
 
     it('should return tag meta_title if in tag data', function () {
@@ -115,6 +112,51 @@ describe('getTitle', function () {
         }, {context: ['post']});
 
         title.should.equal('My awesome post!');
+    });
+
+    it('should return OG post title if in post context', function () {
+        var title = getTitle({
+            post: {
+                title: 'My awesome post!',
+                og_title: 'My Custom Facebook Title'
+            }
+        }, {
+            context: ['post']
+        }, {
+            property: 'og'
+        });
+
+        title.should.equal('My Custom Facebook Title');
+    });
+
+    it('should return twitter post title if in post context', function () {
+        var title = getTitle({
+            post: {
+                title: 'My awesome post!',
+                twitter_title: 'My Custom Twitter Title'
+            }
+        }, {
+            context: ['post']
+        }, {
+            property: 'twitter'
+        });
+
+        title.should.equal('My Custom Twitter Title');
+    });
+
+    it('should not return default post title if in amp context and called with twitter property', function () {
+        var title = getTitle({
+            post: {
+                title: 'My awesome post!',
+                twitter_title: ''
+            }
+        }, {
+            context: ['amp', 'post']
+        }, {
+            property: 'twitter'
+        });
+
+        title.should.equal('');
     });
 
     it('should return post title if in amp context', function () {
@@ -180,6 +222,6 @@ describe('getTitle', function () {
             }
         });
 
-        title.should.equal('My blog title 4 - Page 35');
+        title.should.equal('My blog title 4 (Page 35)');
     });
 });

@@ -1,7 +1,7 @@
-var sinon = require('sinon'),
+var should = require('should'), // jshint ignore:line
+    sinon = require('sinon'),
     rewire = require('rewire'),
     _ = require('lodash'),
-    should = require('should'),
     Promise = require('bluebird'),
     crypto = require('crypto'),
     fs = require('fs'),
@@ -10,9 +10,8 @@ var sinon = require('sinon'),
     schema = require('../../server/data/schema'),
     backupDatabase = rewire('../../server/data/db/backup'),
     fixtures = require('../../server/data/schema/fixtures'),
-    sandbox = sinon.sandbox.create();
 
-should.equal(true, true);
+    sandbox = sinon.sandbox.create();
 
 // Check version integrity
 // These tests exist to ensure that developers are not able to modify the database schema, or permissions fixtures
@@ -20,8 +19,8 @@ should.equal(true, true);
 // both of which are required for migrations to work properly.
 describe('DB version integrity', function () {
     // Only these variables should need updating
-    var currentSchemaHash = 'e648a7d1f9b9c5eb19512999756cd4db',
-        currentFixturesHash = 'b9e684a87353c592df9b23948e364c05';
+    var currentSchemaHash = '329f9b498944c459040426e16fc65b11',
+        currentFixturesHash = '90925e0004a0cedd1e6ea789c81ec67d';
 
     // If this test is failing, then it is likely a change has been made that requires a DB version bump,
     // and the values above will need updating as confirmation
@@ -36,8 +35,8 @@ describe('DB version integrity', function () {
             });
         });
 
-        schemaHash = crypto.createHash('md5').update(JSON.stringify(tablesNoValidation)).digest('hex');
-        fixturesHash = crypto.createHash('md5').update(JSON.stringify(fixtures)).digest('hex');
+        schemaHash = crypto.createHash('md5').update(JSON.stringify(tablesNoValidation), 'binary').digest('hex');
+        fixturesHash = crypto.createHash('md5').update(JSON.stringify(fixtures), 'binary').digest('hex');
 
         schemaHash.should.eql(currentSchemaHash);
         fixturesHash.should.eql(currentFixturesHash);

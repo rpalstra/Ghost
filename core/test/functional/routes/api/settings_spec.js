@@ -1,8 +1,9 @@
-var testUtils     = require('../../../utils'),
-    should        = require('should'),
-    supertest     = require('supertest'),
-    config        = require('../../../../../core/server/config'),
-    ghost         = testUtils.startGhost,
+var should = require('should'),
+    _ = require('lodash'),
+    supertest = require('supertest'),
+    testUtils = require('../../../utils'),
+    config = require('../../../../../core/server/config'),
+    ghost = testUtils.startGhost,
     request;
 
 describe('Settings API', function () {
@@ -48,6 +49,10 @@ describe('Settings API', function () {
                 should.exist(jsonResponse);
 
                 testUtils.API.checkResponse(jsonResponse, 'settings');
+
+                JSON.parse(_.find(jsonResponse.settings, {key: 'unsplash'}).value).isActive.should.eql(true);
+                JSON.parse(_.find(jsonResponse.settings, {key: 'amp'}).value).should.eql(true);
+
                 done();
             });
     });

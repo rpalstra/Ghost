@@ -1,12 +1,13 @@
-var should  = require('should'),
-    sinon   = require('sinon'),
+var should = require('should'),
+    sinon = require('sinon'),
     Promise = require('bluebird'),
-    rewire  = require('rewire'),
+    rewire = require('rewire'),
 
-    models  = require('../../server/models'),
+    models = require('../../server/models'),
     baseUtils = require('../../server/models/base/utils'),
     fixtureUtils = rewire('../../server/data/schema/fixtures/utils'),
-    fixtures     = require('../../server/data/schema/fixtures/fixtures'),
+    fixtures = require('../../server/data/schema/fixtures/fixtures'),
+
     sandbox = sinon.sandbox.create();
 
 describe('Migration Fixture Utils', function () {
@@ -105,14 +106,14 @@ describe('Migration Fixture Utils', function () {
             fixtureUtils.addFixturesForModel(fixtures.models[0]).then(function (result) {
                 should.exist(result);
                 result.should.be.an.Object();
-                result.should.have.property('expected',  1);
-                result.should.have.property('done',  1);
+                result.should.have.property('expected', 7);
+                result.should.have.property('done', 7);
 
-                postOneStub.calledOnce.should.be.true();
-                postAddStub.calledOnce.should.be.true();
+                postOneStub.callCount.should.eql(7);
+                postAddStub.callCount.should.eql(7);
 
                 done();
-            });
+            }).catch(done);
         });
 
         it('should not call add for main post fixture if it is already found', function (done) {
@@ -121,14 +122,14 @@ describe('Migration Fixture Utils', function () {
             fixtureUtils.addFixturesForModel(fixtures.models[0]).then(function (result) {
                 should.exist(result);
                 result.should.be.an.Object();
-                result.should.have.property('expected',  1);
-                result.should.have.property('done',  0);
+                result.should.have.property('expected', 7);
+                result.should.have.property('done', 0);
 
-                postOneStub.calledOnce.should.be.true();
-                postAddStub.calledOnce.should.be.false();
+                postOneStub.callCount.should.eql(7);
+                postAddStub.callCount.should.eql(0);
 
                 done();
-            });
+            }).catch(done);
         });
     });
 
@@ -150,19 +151,19 @@ describe('Migration Fixture Utils', function () {
             fixtureUtils.addFixturesForRelation(fixtures.relations[0]).then(function (result) {
                 should.exist(result);
                 result.should.be.an.Object();
-                result.should.have.property('expected',  30);
-                result.should.have.property('done',  30);
+                result.should.have.property('expected', 34);
+                result.should.have.property('done', 34);
 
                 // Permissions & Roles
                 permsAllStub.calledOnce.should.be.true();
                 rolesAllStub.calledOnce.should.be.true();
-                dataMethodStub.filter.callCount.should.eql(30);
+                dataMethodStub.filter.callCount.should.eql(34);
                 dataMethodStub.find.callCount.should.eql(3);
-                baseUtilAttachStub.callCount.should.eql(30);
+                baseUtilAttachStub.callCount.should.eql(34);
 
-                fromItem.related.callCount.should.eql(30);
-                fromItem.findWhere.callCount.should.eql(30);
-                toItem[0].get.callCount.should.eql(60);
+                fromItem.related.callCount.should.eql(34);
+                fromItem.findWhere.callCount.should.eql(34);
+                toItem[0].get.callCount.should.eql(68);
 
                 done();
             }).catch(done);
@@ -185,18 +186,18 @@ describe('Migration Fixture Utils', function () {
             fixtureUtils.addFixturesForRelation(fixtures.relations[1]).then(function (result) {
                 should.exist(result);
                 result.should.be.an.Object();
-                result.should.have.property('expected',  1);
-                result.should.have.property('done',  1);
+                result.should.have.property('expected', 7);
+                result.should.have.property('done', 7);
 
                 // Posts & Tags
                 postsAllStub.calledOnce.should.be.true();
                 tagsAllStub.calledOnce.should.be.true();
-                dataMethodStub.filter.calledOnce.should.be.true();
-                dataMethodStub.find.calledOnce.should.be.true();
-                fromItem.related.calledOnce.should.be.true();
-                fromItem.findWhere.calledOnce.should.be.true();
-                toItem[0].get.calledOnce.should.be.true();
-                baseUtilAttachStub.callCount.should.eql(1);
+                dataMethodStub.filter.callCount.should.eql(7);
+                dataMethodStub.find.callCount.should.eql(7);
+                fromItem.related.callCount.should.eql(7);
+                fromItem.findWhere.callCount.should.eql(7);
+                toItem[0].get.callCount.should.eql(7);
+                baseUtilAttachStub.callCount.should.eql(7);
 
                 done();
             }).catch(done);
@@ -221,18 +222,18 @@ describe('Migration Fixture Utils', function () {
             fixtureUtils.addFixturesForRelation(fixtures.relations[1]).then(function (result) {
                 should.exist(result);
                 result.should.be.an.Object();
-                result.should.have.property('expected',  1);
-                result.should.have.property('done',  0);
+                result.should.have.property('expected', 7);
+                result.should.have.property('done', 0);
 
                 // Posts & Tags
                 postsAllStub.calledOnce.should.be.true();
                 tagsAllStub.calledOnce.should.be.true();
-                dataMethodStub.filter.calledOnce.should.be.true();
-                dataMethodStub.find.calledOnce.should.be.true();
+                dataMethodStub.filter.callCount.should.eql(7);
+                dataMethodStub.find.callCount.should.eql(7);
 
-                fromItem.related.calledOnce.should.be.true();
-                fromItem.findWhere.calledOnce.should.be.true();
-                toItem[0].get.calledOnce.should.be.true();
+                fromItem.related.callCount.should.eql(7);
+                fromItem.findWhere.callCount.should.eql(7);
+                toItem[0].get.callCount.should.eql(7);
 
                 fromItem.tags.called.should.be.false();
                 fromItem.attach.called.should.be.false();
@@ -247,9 +248,9 @@ describe('Migration Fixture Utils', function () {
             var foundFixture = fixtureUtils.findModelFixtureEntry('Client', {slug: 'ghost-admin'});
             foundFixture.should.be.an.Object();
             foundFixture.should.eql({
-                name:             'Ghost Admin',
-                slug:             'ghost-admin',
-                status:           'enabled'
+                name: 'Ghost Admin',
+                slug: 'ghost-admin',
+                status: 'enabled'
             });
         });
     });

@@ -1,9 +1,9 @@
-var supertest     = require('supertest'),
-    should        = require('should'),
-    testUtils     = require('../../../utils'),
-    db            = require('../../../../../core/server/data/db'),
-    config        = require('../../../../../core/server/config'),
-    ghost         = testUtils.startGhost,
+var should = require('should'),
+    supertest = require('supertest'),
+    testUtils = require('../../../utils'),
+    db = require('../../../../../core/server/data/db'),
+    config = require('../../../../../core/server/config'),
+    ghost = testUtils.startGhost,
     failedLoginAttempt,
     count,
     checkBruteTable,
@@ -98,13 +98,13 @@ describe('Spam Prevention API', function () {
                     client_secret: 'not_available'
                 })
                 .expect('Content-Type', /json/)
-                .expect(401)
+                .expect(422)
                 .end(function (err) {
                     if (err) {
                         return done(err);
                     }
 
-                    if (count <  config.get('spam:user_login:freeRetries') + 1) {
+                    if (count < config.get('spam:user_login:freeRetries') + 1) {
                         return failedLoginAttempt(email);
                     }
 
@@ -155,13 +155,13 @@ describe('Spam Prevention API', function () {
                     client_id: 'ghost-admin',
                     client_secret: 'not_available'
                 }).expect('Content-Type', /json/)
-                .expect(401)
+                .expect(422)
                 .end(function (err) {
                     if (err) {
                         return done(err);
                     }
 
-                    if (count <  config.get('spam:user_login:freeRetries') + 1) {
+                    if (count < config.get('spam:user_login:freeRetries') + 1) {
                         return failedLoginAttempt(owner.email);
                     }
 
@@ -188,7 +188,7 @@ describe('Spam Prevention API', function () {
                 .send({
                     grant_type: 'password',
                     username: email,
-                    password: 'Sl1m3rson',
+                    password: 'Sl1m3rson99',
                     client_id: 'ghost-admin',
                     client_secret: 'not_available'
                 }).expect('Content-Type', /json/)
@@ -220,7 +220,7 @@ describe('Spam Prevention API', function () {
                     client_id: 'ghost-admin',
                     client_secret: 'not_available'
                 }).expect('Content-Type', /json/)
-                .expect(401)
+                .expect(422)
                 .end(function (err) {
                     if (err) {
                         return done(err);

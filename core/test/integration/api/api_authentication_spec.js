@@ -1,18 +1,19 @@
-var testUtils   = require('../../utils'),
-    should      = require('should'),
-    _           = require('lodash'),
-    sinon       = require('sinon'),
-    Promise     = require('bluebird'),
-    uid         = require('../../../server/utils').uid,
-    AuthAPI     = require('../../../server/api/authentication'),
-    mail        = require('../../../server/api/mail'),
-    models      = require('../../../server/models'),
-    errors      = require('../../../server/errors'),
-    sandbox     = sinon.sandbox.create(),
-    context     = testUtils.context,
+var should = require('should'),
+    sinon = require('sinon'),
+    testUtils = require('../../utils'),
+    _ = require('lodash'),
+    Promise = require('bluebird'),
+    uid = require('../../../server/utils').uid,
+    AuthAPI = require('../../../server/api/authentication'),
+    mail = require('../../../server/api/mail'),
+    models = require('../../../server/models'),
+    errors = require('../../../server/errors'),
+    context = testUtils.context,
     Accesstoken,
     Refreshtoken,
-    User;
+    User,
+
+    sandbox = sinon.sandbox.create();
 
 describe('Authentication API', function () {
     var testInvite = {
@@ -31,8 +32,8 @@ describe('Authentication API', function () {
         testReset = {
             passwordreset: [{
                 token: 'abc',
-                newPassword: 'abcdefgh',
-                ne2Password: 'abcdefgh'
+                newPassword: 'abcdefghij',
+                ne2Password: 'abcdefghij'
             }]
         };
 
@@ -65,7 +66,7 @@ describe('Authentication API', function () {
                     var setupData = {
                         name: 'test user',
                         email: 'test@example.com',
-                        password: 'areallygoodpassword',
+                        password: 'thisissupersafe',
                         blogTitle: 'a test blog'
                     };
 
@@ -74,8 +75,9 @@ describe('Authentication API', function () {
                             done(new Error('Setup ran when it should not have.'));
                         }).catch(function (err) {
                             should.exist(err);
-                            err.name.should.equal('InternalServerError');
-                            err.statusCode.should.equal(500);
+                            err.name.should.equal('NotFoundError');
+                            err.message.should.equal('Owner not found');
+                            err.statusCode.should.equal(404);
 
                             done();
                         }).catch(done);
@@ -101,7 +103,7 @@ describe('Authentication API', function () {
                 var setupData = {
                     name: 'test user',
                     email: 'test@example.com',
-                    password: 'areallygoodpassword',
+                    password: 'thisissupersafe',
                     blogTitle: 'a test blog'
                 };
 
@@ -126,7 +128,7 @@ describe('Authentication API', function () {
                 var setupData = {
                     name: 'test user',
                     email: 'test@example.com',
-                    password: 'areallygoodpassword'
+                    password: 'thisissupersafe'
                 };
 
                 AuthAPI.setup({setup: [setupData]}).then(function (result) {
@@ -221,7 +223,7 @@ describe('Authentication API', function () {
                 var setupData = {
                     name: 'test user',
                     email: 'test@example.com',
-                    password: 'areallygoodpassword',
+                    password: 'thisissupersafe',
                     blogTitle: 'a test blog'
                 };
 
@@ -254,7 +256,10 @@ describe('Authentication API', function () {
             it('should allow an invitation to be accepted', function () {
                 var invite;
 
-                return models.Invite.add({email: '123@meins.de', role_id: testUtils.DataGenerator.Content.roles[0].id}, context.internal)
+                return models.Invite.add({
+                    email: '123@meins.de',
+                    role_id: testUtils.DataGenerator.Content.roles[0].id
+                }, context.internal)
                     .then(function (_invite) {
                         invite = _invite;
                         invite.toJSON().role_id.should.eql(testUtils.DataGenerator.Content.roles[0].id);
@@ -268,7 +273,7 @@ describe('Authentication API', function () {
                                     token: invite.get('token'),
                                     email: invite.get('email'),
                                     name: invite.get('email'),
-                                    password: 'eightcharacterslong'
+                                    password: 'tencharacterslong'
                                 }
                             ]
                         });
@@ -298,7 +303,8 @@ describe('Authentication API', function () {
 
                         return models.Invite.edit({
                             status: 'sent',
-                            expires: Date.now() - 10000}, _.merge({}, {id: invite.id}, context.internal));
+                            expires: Date.now() - 10000
+                        }, _.merge({}, {id: invite.id}, context.internal));
                     })
                     .then(function () {
                         return AuthAPI.acceptInvitation({
@@ -307,7 +313,7 @@ describe('Authentication API', function () {
                                     token: invite.get('token'),
                                     email: invite.get('email'),
                                     name: invite.get('email'),
-                                    password: 'eightcharacterslong'
+                                    password: 'tencharacterslong'
                                 }
                             ]
                         });
@@ -333,8 +339,8 @@ describe('Authentication API', function () {
 
             it('should not generate a password reset token for an invalid email address', function (done) {
                 var badResetRequest = {
-                        passwordreset: [{email: ''}]
-                    };
+                    passwordreset: [{email: ''}]
+                };
 
                 AuthAPI.generateResetToken(badResetRequest).then(function () {
                     done(new Error('reset token was generated for invalid email address'));
@@ -403,7 +409,7 @@ describe('Authentication API', function () {
                 var user = {
                         name: 'uninvited user',
                         email: 'notinvited@example.com',
-                        password: '12345678',
+                        password: 'thisissupersafe',
                         status: 'active'
                     },
                     options = {
@@ -499,11 +505,11 @@ describe('Authentication API', function () {
 
             it('should not allow setup to be updated', function (done) {
                 var setupData = {
-                        name: 'test user',
-                        email: 'test@example.com',
-                        password: 'areallygoodpassword',
-                        blogTitle: 'a test blog'
-                    };
+                    name: 'test user',
+                    email: 'test@example.com',
+                    password: 'thisissupersafe',
+                    blogTitle: 'a test blog'
+                };
 
                 AuthAPI.updateSetup({setup: [setupData]}, {}).then(function () {
                     done(new Error('Update was able to be run'));
@@ -532,11 +538,11 @@ describe('Authentication API', function () {
 
             it('should not allow setup to be updated', function (done) {
                 var setupData = {
-                        name: 'test user',
-                        email: 'test@example.com',
-                        password: 'areallygoodpassword',
-                        blogTitle: 'a test blog'
-                    };
+                    name: 'test user',
+                    email: 'test@example.com',
+                    password: 'thisissupersafe',
+                    blogTitle: 'a test blog'
+                };
 
                 AuthAPI.updateSetup({setup: [setupData]}, context.author).then(function () {
                     done(new Error('Update was able to be run'));
@@ -565,11 +571,11 @@ describe('Authentication API', function () {
 
             it('should allow setup to be updated', function (done) {
                 var setupData = {
-                        name: 'test user',
-                        email: 'test@example.com',
-                        password: 'areallygoodpassword',
-                        blogTitle: 'a test blog'
-                    };
+                    name: 'test user',
+                    email: 'test@example.com',
+                    password: 'thisissupersafe',
+                    blogTitle: 'a test blog'
+                };
 
                 AuthAPI.updateSetup({setup: [setupData]}, context.owner).then(function (result) {
                     should.exist(result);

@@ -1,13 +1,15 @@
-var cp         = require('child_process'),
-    _          = require('lodash'),
-    fs         = require('fs'),
-    url        = require('url'),
-    net        = require('net'),
-    Promise    = require('bluebird'),
-    path       = require('path'),
-    KnexMigrator  = require('knex-migrator'),
-    config        = require('../../server/config'),
-    knexMigrator     = new KnexMigrator();
+var cp = require('child_process'),
+    _ = require('lodash'),
+    fs = require('fs-extra'),
+    url = require('url'),
+    net = require('net'),
+    os = require('os'),
+    uuid = require('uuid'),
+    Promise = require('bluebird'),
+    path = require('path'),
+    KnexMigrator = require('knex-migrator'),
+    config = require('../../server/config'),
+    knexMigrator = new KnexMigrator();
 
 function findFreePort(port) {
     return new Promise(function (resolve, reject) {
@@ -43,12 +45,16 @@ function findFreePort(port) {
 // Creates a new fork of Ghost process with a given config
 // Useful for tests that want to verify certain config options
 function forkGhost(newConfig) {
-    var port;
+    var port,
+        contentFolderForTests = path.join(os.tmpdir(), uuid.v1(), 'ghost-test');
 
     return findFreePort()
         .then(function (_port) {
             port = _port;
 
+            return knexMigrator.reset();
+        })
+        .then(function () {
             return knexMigrator.init();
         })
         .then(function () {
@@ -57,9 +63,15 @@ function forkGhost(newConfig) {
             }, (newConfig.server || {}));
 
             if (newConfig.url) {
-                newConfig.url = url.format(_.extend({}, url.parse(newConfig.url), {port: newConfig.server.port, host: null}));
+                newConfig.url = url.format(_.extend({}, url.parse(newConfig.url), {
+                    port: newConfig.server.port,
+                    host: null
+                }));
             } else {
-                newConfig.url = url.format(_.extend({}, url.parse(config.get('url')), {port: newConfig.server.port, host: null}));
+                newConfig.url = url.format(_.extend({}, url.parse(config.get('url')), {
+                    port: newConfig.server.port,
+                    host: null
+                }));
             }
 
             newConfig.logging = {
@@ -67,6 +79,24 @@ function forkGhost(newConfig) {
                 transports: ['stdout'],
                 rotation: false
             };
+
+            /**
+             * We never use the root content folder.
+             * The tests fixtures provide the same folder structure (data, themes etc.)
+             */
+            if (!newConfig.paths) {
+                newConfig.paths = {
+                    contentPath: contentFolderForTests
+                };
+
+                fs.ensureDirSync(contentFolderForTests);
+                fs.ensureDirSync(path.join(contentFolderForTests, 'data'));
+                fs.ensureDirSync(path.join(contentFolderForTests, 'themes'));
+                fs.ensureDirSync(path.join(contentFolderForTests, 'images'));
+                fs.ensureDirSync(path.join(contentFolderForTests, 'logs'));
+                fs.ensureDirSync(path.join(contentFolderForTests, 'adapters'));
+                fs.copySync(path.join(__dirname, 'fixtures', 'themes', 'casper'), path.join(contentFolderForTests, 'themes', 'casper'));
+            }
 
             var newConfigFile = path.join(config.get('paths').appRoot, 'config.' + config.get('env') + '.json');
 
@@ -107,8 +137,7 @@ function forkGhost(newConfig) {
                                 resolve(child);
                             }
                         });
-                        socket.on('error', function (err) {
-                            /*jshint unused:false*/
+                        socket.on('error', function () {
                             pingTries = pingTries + 1;
 
                             // continue checking

@@ -3,7 +3,7 @@ var _       = require('lodash'),
     path    = require('path'),
     config  = require('../../../config'),
     utils   = require('../../../utils'),
-    storage = require('../../../storage'),
+    storage = require('../../../adapters/storage'),
 
     ImageHandler;
 
@@ -36,7 +36,7 @@ ImageHandler = {
         });
 
         return Promise.map(files, function (image) {
-            return store.getUniqueFileName(store, image, image.targetDir).then(function (targetFilename) {
+            return store.getUniqueFileName(image, image.targetDir).then(function (targetFilename) {
                 image.newPath = utils.url.urlJoin('/', utils.url.getSubdir(), utils.url.STATIC_IMAGE_URL_PREFIX,
                     path.relative(config.getContentPath('images'), targetFilename));
 

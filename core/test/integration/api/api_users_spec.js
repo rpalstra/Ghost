@@ -1,23 +1,45 @@
-var testUtils       = require('../../utils'),
-    should          = require('should'),
-    Promise         = require('bluebird'),
-    _               = require('lodash'),
-    models          = require('../../../server/models'),
-    UserAPI         = require('../../../server/api/users'),
-    db              = require('../../../server/data/db'),
-    context         = testUtils.context,
-    userIdFor       = testUtils.users.ids,
-    roleIdFor       = testUtils.roles.ids;
+var should = require('should'),
+    sinon = require('sinon'),
+    testUtils = require('../../utils'),
+    Promise = require('bluebird'),
+    _ = require('lodash'),
+    models = require('../../../server/models'),
+    errors = require('../../../server/errors'),
+    events = require('../../../server/events'),
+    UserAPI = require('../../../server/api/users'),
+    db = require('../../../server/data/db'),
+    context = testUtils.context,
+    userIdFor = testUtils.users.ids,
+    roleIdFor = testUtils.roles.ids,
+
+    sandbox = sinon.sandbox.create();
 
 describe('Users API', function () {
+    var eventsTriggered;
+
     // Keep the DB clean
     before(testUtils.teardown);
 
+    beforeEach(function () {
+        eventsTriggered = {};
+
+        sandbox.stub(events, 'emit', function (eventName, eventObj) {
+            if (!eventsTriggered[eventName]) {
+                eventsTriggered[eventName] = [];
+            }
+
+            eventsTriggered[eventName].push(eventObj);
+        });
+    });
+
     beforeEach(testUtils.setup(
-        'users:roles', 'users', 'user:token', 'perms:user', 'perms:role', 'perms:setting', 'perms:init', 'posts'
+        'users:roles', 'users', 'user-token', 'perms:user', 'perms:role', 'perms:setting', 'perms:init', 'posts'
     ));
 
-    afterEach(testUtils.teardown);
+    afterEach(function () {
+        sandbox.restore();
+        return testUtils.teardown();
+    });
 
     function checkForErrorType(type, done) {
         return function checkForErrorType(error) {
@@ -34,26 +56,26 @@ describe('Users API', function () {
         var userData = testUtils.DataGenerator.forModel.users[0];
 
         models.User.check({email: userData.email, password: userData.password}).then(function (user) {
-            return UserAPI.read({id: user.id});
+            return UserAPI.read(_.merge({id: user.id}, context.internal));
         }).then(function (response) {
             response.users[0].created_at.should.be.an.instanceof(Date);
             response.users[0].updated_at.should.be.an.instanceof(Date);
-            response.users[0].last_login.should.be.an.instanceof(Date);
+            response.users[0].last_seen.should.be.an.instanceof(Date);
 
             done();
         }).catch(done);
     });
 
     describe('Browse', function () {
-        function checkBrowseResponse(response, count, additional, missing) {
+        function checkBrowseResponse(response, count, additional, missing, only, options) {
             should.exist(response);
             testUtils.API.checkResponse(response, 'users');
             should.exist(response.users);
             response.users.should.have.length(count);
-            testUtils.API.checkResponse(response.users[0], 'user', additional, missing);
-            testUtils.API.checkResponse(response.users[1], 'user', additional, missing);
-            testUtils.API.checkResponse(response.users[2], 'user', additional, missing);
-            testUtils.API.checkResponse(response.users[3], 'user', additional, missing);
+            testUtils.API.checkResponse(response.users[0], 'user', additional, missing, only, options);
+            testUtils.API.checkResponse(response.users[1], 'user', additional, missing, only, options);
+            testUtils.API.checkResponse(response.users[2], 'user', additional, missing, only, options);
+            testUtils.API.checkResponse(response.users[3], 'user', additional, missing, only, options);
         }
 
         it('Owner can browse', function (done) {
@@ -86,7 +108,7 @@ describe('Users API', function () {
 
         it('No-auth CAN browse, but only gets filtered active users', function (done) {
             UserAPI.browse().then(function (response) {
-                checkBrowseResponse(response, 7, null, ['email']);
+                checkBrowseResponse(response, 7, null, null, null, {public: true});
                 done();
             }).catch(done);
         });
@@ -99,7 +121,10 @@ describe('Users API', function () {
         });
 
         it('Can browse with roles', function (done) {
-            UserAPI.browse(_.extend({}, testUtils.context.admin, {status: 'all', include: 'roles'})).then(function (response) {
+            UserAPI.browse(_.extend({}, testUtils.context.admin, {
+                status: 'all',
+                include: 'roles'
+            })).then(function (response) {
                 should.exist(response);
                 testUtils.API.checkResponse(response, 'users');
                 should.exist(response.users);
@@ -195,20 +220,18 @@ describe('Users API', function () {
     });
 
     describe('Read', function () {
-        function checkReadResponse(response, noEmail) {
+        function checkReadResponse(response, noEmail, additional, missing, only, options) {
             should.exist(response);
             should.not.exist(response.meta);
             should.exist(response.users);
             response.users[0].id.should.eql(testUtils.DataGenerator.Content.users[0].id);
 
             if (noEmail) {
-                // Email should be missing
-                testUtils.API.checkResponse(response.users[0], 'user', [], ['email']);
-                should.not.exist(response.users[0].email);
+                testUtils.API.checkResponse(response.users[0], 'user', additional, missing, only, options);
             } else {
-                testUtils.API.checkResponse(response.users[0], 'user');
+                testUtils.API.checkResponse(response.users[0], 'user', additional, missing, only, options);
+                response.users[0].created_at.should.be.an.instanceof(Date);
             }
-            response.users[0].created_at.should.be.an.instanceof(Date);
         }
 
         it('Owner can read', function (done) {
@@ -243,7 +266,7 @@ describe('Users API', function () {
 
         it('No-auth can read', function (done) {
             UserAPI.read({id: userIdFor.owner}).then(function (response) {
-                checkReadResponse(response, true);
+                checkReadResponse(response, true, null, null, null, {public: true});
                 done();
             }).catch(done);
         });
@@ -289,17 +312,17 @@ describe('Users API', function () {
 
                     return UserAPI.edit({users: [{name: newName}]}, _.extend({}, context.owner, {id: userIdFor.admin}));
                 }).then(function (response) {
-                    checkEditResponse(response);
-                    return UserAPI.edit({users: [{name: newName}]}, _.extend({}, context.owner, {id: userIdFor.editor}));
-                }).then(function (response) {
-                    checkEditResponse(response);
+                checkEditResponse(response);
+                return UserAPI.edit({users: [{name: newName}]}, _.extend({}, context.owner, {id: userIdFor.editor}));
+            }).then(function (response) {
+                checkEditResponse(response);
 
-                    return UserAPI.edit({users: [{name: newName}]}, _.extend({}, context.owner, {id: userIdFor.author}));
-                }).then(function (response) {
-                    checkEditResponse(response);
+                return UserAPI.edit({users: [{name: newName}]}, _.extend({}, context.owner, {id: userIdFor.author}));
+            }).then(function (response) {
+                checkEditResponse(response);
 
-                    done();
-                }).catch(done);
+                done();
+            }).catch(done);
         });
 
         it('Admin can edit Admin, Editor and Author roles', function (done) {
@@ -308,14 +331,14 @@ describe('Users API', function () {
                     checkEditResponse(response);
                     return UserAPI.edit({users: [{name: newName}]}, _.extend({}, context.admin, {id: userIdFor.editor}));
                 }).then(function (response) {
-                    checkEditResponse(response);
+                checkEditResponse(response);
 
-                    return UserAPI.edit({users: [{name: newName}]}, _.extend({}, context.admin, {id: userIdFor.author}));
-                }).then(function (response) {
-                    checkEditResponse(response);
+                return UserAPI.edit({users: [{name: newName}]}, _.extend({}, context.admin, {id: userIdFor.author}));
+            }).then(function (response) {
+                checkEditResponse(response);
 
-                    done();
-                }).catch(done);
+                done();
+            }).catch(done);
         });
 
         it('Admin CANNOT edit Owner role', function (done) {
@@ -323,19 +346,34 @@ describe('Users API', function () {
                 .then(function () {
                     done(new Error('Admin should not be able to edit owner account'));
                 }).catch(function (error) {
-                    error.errorType.should.eql('NoPermissionError');
-                    done();
-                });
+                error.errorType.should.eql('NoPermissionError');
+                done();
+            });
         });
 
         it('Admin can edit Admin, Editor and Author roles with roles in payload', function (done) {
-            UserAPI.edit({users: [{name: newName, roles: [roleIdFor.admin]}]}, _.extend({}, context.admin, {id: userIdFor.admin})).then(function (response) {
+            UserAPI.edit({
+                users: [{
+                    name: newName,
+                    roles: [roleIdFor.admin]
+                }]
+            }, _.extend({}, context.admin, {id: userIdFor.admin})).then(function (response) {
                 checkEditResponse(response);
-                return UserAPI.edit({users: [{name: newName, roles: [roleIdFor.editor]}]}, _.extend({}, context.admin, {id: userIdFor.editor}));
+                return UserAPI.edit({
+                    users: [{
+                        name: newName,
+                        roles: [roleIdFor.editor]
+                    }]
+                }, _.extend({}, context.admin, {id: userIdFor.editor}));
             }).then(function (response) {
                 checkEditResponse(response);
 
-                return UserAPI.edit({users: [{name: newName, roles: [roleIdFor.author]}]}, _.extend({}, context.admin, {id: userIdFor.author}));
+                return UserAPI.edit({
+                    users: [{
+                        name: newName,
+                        roles: [roleIdFor.author]
+                    }]
+                }, _.extend({}, context.admin, {id: userIdFor.author}));
             }).then(function (response) {
                 checkEditResponse(response);
 
@@ -431,7 +469,12 @@ describe('Users API', function () {
         it('Author can edit self with role set', function (done) {
             // Next test that author CAN edit self
             UserAPI.edit(
-                {users: [{name: newName, roles: [roleIdFor.author]}]}, _.extend({}, context.author, {id: userIdFor.author})
+                {
+                    users: [{
+                        name: newName,
+                        roles: [roleIdFor.author]
+                    }]
+                }, _.extend({}, context.author, {id: userIdFor.author})
             ).then(function (response) {
                 checkEditResponse(response);
                 done();
@@ -441,7 +484,12 @@ describe('Users API', function () {
         it('Author can edit self with role set as string', function (done) {
             // Next test that author CAN edit self
             UserAPI.edit(
-                {users: [{name: newName, roles: [roleIdFor.author.toString()]}]}, _.extend({}, context.author, {id: userIdFor.author})
+                {
+                    users: [{
+                        name: newName,
+                        roles: [roleIdFor.author.toString()]
+                    }]
+                }, _.extend({}, context.author, {id: userIdFor.author})
             ).then(function (response) {
                 checkEditResponse(response);
                 done();
@@ -450,14 +498,321 @@ describe('Users API', function () {
 
         it('Does not allow password to be set', function (done) {
             UserAPI.edit(
-                {users: [{name: 'newname', password: 'newpassword'}]}, _.extend({}, context.author, {id: userIdFor.author})
+                {
+                    users: [{
+                        name: 'newname',
+                        password: 'thisissupersafe'
+                    }]
+                }, _.extend({}, context.author, {id: userIdFor.author})
             ).then(function () {
                 return models.User.findOne({id: userIdFor.author}).then(function (response) {
                     response.get('name').should.eql('newname');
-                    response.get('password').should.not.eql('newpassword');
+                    response.get('password').should.not.eql('thisissupersafe');
                     done();
                 });
             }).catch(done);
+        });
+
+        describe('Change status', function () {
+            describe('as owner', function () {
+                it('[success] can change status to inactive for admin', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.owner, {id: userIdFor.admin})
+                    ).then(function () {
+                        Object.keys(eventsTriggered).length.should.eql(2);
+                        should.exist(eventsTriggered['user.edited']);
+                        should.exist(eventsTriggered['user.deactivated']);
+
+                        return models.User.findOne({id: userIdFor.admin, status: 'all'}).then(function (response) {
+                            response.get('status').should.eql('inactive');
+                        });
+                    });
+                });
+
+                it('[success] can change status to inactive for editor', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.owner, {id: userIdFor.editor})
+                    ).then(function () {
+                        return models.User.findOne({id: userIdFor.editor, status: 'all'}).then(function (response) {
+                            response.get('status').should.eql('inactive');
+                        });
+                    });
+                });
+
+                it('[failure] can\' change my own status to inactive', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.owner, {id: userIdFor.owner})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can\' change my own status to locked', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'locked'
+                                }
+                            ]
+                        }, _.extend({}, context.owner, {id: userIdFor.owner})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+            });
+
+            describe('as admin', function () {
+                it('[failure] can\'t change status to inactive for owner', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.admin, {id: userIdFor.owner})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can\'t change status to inactive for admin', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.admin, {id: userIdFor.admin2})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can\' change my own status to inactive', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.admin, {id: userIdFor.admin})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[success] can change status to inactive for editor', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.admin, {id: userIdFor.editor})
+                    ).then(function () {
+                        return models.User.findOne({id: userIdFor.editor, status: 'all'}).then(function (response) {
+                            response.get('status').should.eql('inactive');
+                        });
+                    });
+                });
+            });
+
+            describe('as editor', function () {
+                it('[failure] can\'t change status to inactive for owner', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.editor, {id: userIdFor.owner})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can\' change my own status to inactive', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.editor, {id: userIdFor.editor})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can\'t change status to inactive for admin', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.editor, {id: userIdFor.admin})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can\'t change status to inactive for editor', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.editor, {id: userIdFor.editor2})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[success] can change status to inactive for author', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.editor, {id: userIdFor.author})
+                    ).then(function () {
+                        return models.User.findOne({id: userIdFor.author, status: 'all'}).then(function (response) {
+                            response.get('status').should.eql('inactive');
+                        });
+                    });
+                });
+            });
+
+            describe('as author', function () {
+                it('[failure] can\'t change status to inactive for owner', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.author, {id: userIdFor.owner})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can\' change my own status to inactive', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.author, {id: userIdFor.author})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can\'t change status to inactive for admin', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.author, {id: userIdFor.admin})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can\'t change status to inactive for editor', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.author, {id: userIdFor.editor})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+
+                it('[failure] can change status to inactive for author', function () {
+                    return UserAPI.edit(
+                        {
+                            users: [
+                                {
+                                    status: 'inactive'
+                                }
+                            ]
+                        }, _.extend({}, context.author, {id: userIdFor.author2})
+                    ).then(function () {
+                        throw new Error('this is not allowed');
+                    }).catch(function (err) {
+                        (err instanceof errors.NoPermissionError).should.eql(true);
+                    });
+                });
+            });
         });
     });
 
@@ -569,15 +924,15 @@ describe('Users API', function () {
                         // Editor
                         return UserAPI.destroy(_.extend({}, context.owner, {id: userIdFor.editor}));
                     }).then(function (response) {
-                        should.not.exist(response);
+                    should.not.exist(response);
 
-                        // Author
-                        return UserAPI.destroy(_.extend({}, context.owner, {id: userIdFor.author}));
-                    }).then(function (response) {
-                        should.not.exist(response);
+                    // Author
+                    return UserAPI.destroy(_.extend({}, context.owner, {id: userIdFor.author}));
+                }).then(function (response) {
+                    should.not.exist(response);
 
-                        done();
-                    }).catch(done);
+                    done();
+                }).catch(done);
             });
         });
 
@@ -598,15 +953,15 @@ describe('Users API', function () {
                         // Editor
                         return UserAPI.destroy(_.extend({}, context.admin, {id: testUtils.DataGenerator.Content.extraUsers[1].id}));
                     }).then(function (response) {
-                        should.not.exist(response);
+                    should.not.exist(response);
 
-                        // Author
-                        return UserAPI.destroy(_.extend({}, context.admin, {id: testUtils.DataGenerator.Content.extraUsers[2].id}));
-                    }).then(function (response) {
-                        should.not.exist(response);
+                    // Author
+                    return UserAPI.destroy(_.extend({}, context.admin, {id: testUtils.DataGenerator.Content.extraUsers[2].id}));
+                }).then(function (response) {
+                    should.not.exist(response);
 
-                        done();
-                    }).catch(done);
+                    done();
+                }).catch(done);
             });
         });
 
@@ -964,6 +1319,37 @@ describe('Users API', function () {
                 done(new Error('Admin is not denied transferring ownership.'));
             }).catch(checkForErrorType('NoPermissionError', done));
         });
+
+        it('Blog is still setup', function (done) {
+            // transfer ownership to admin user
+            UserAPI.transferOwnership(
+                {owner: [{id: userIdFor.admin}]},
+                context.owner
+            ).then(function (response) {
+                should.exist(response);
+                return models.User.isSetup();
+            }).then(function (isSetup) {
+                isSetup.should.eql(true);
+                done();
+            }).catch(done);
+        });
+
+        it('Blog is still setup, new owner is locked', function (done) {
+            // transfer ownership to admin user
+            UserAPI.transferOwnership(
+                {owner: [{id: userIdFor.admin}]},
+                context.owner
+            ).then(function (response) {
+                should.exist(response);
+                return models.User.edit({status: 'locked'}, {id: userIdFor.admin});
+            }).then(function (modifiedUser) {
+                modifiedUser.get('status').should.eql('locked');
+                return models.User.isSetup();
+            }).then(function (isSetup) {
+                isSetup.should.eql(true);
+                done();
+            }).catch(done);
+        });
     });
 
     describe('Change Password', function () {
@@ -971,7 +1357,7 @@ describe('Users API', function () {
             var payload = {
                 password: [{
                     user_id: userIdFor.owner,
-                    oldPassword: 'Sl1m3rson',
+                    oldPassword: 'Sl1m3rson99',
                     newPassword: 'newSl1m3rson',
                     ne2Password: 'newSl1m3rson'
                 }]
@@ -988,8 +1374,8 @@ describe('Users API', function () {
                 password: [{
                     user_id: userIdFor.owner,
                     oldPassword: 'wrong',
-                    newPassword: 'Sl1m3rson',
-                    ne2Password: 'Sl1m3rson'
+                    newPassword: 'Sl1m3rson9',
+                    ne2Password: 'Sl1m3rson9'
                 }]
             };
             UserAPI.changePassword(payload, _.extend({}, context.owner, {id: userIdFor.owner}))
@@ -1003,8 +1389,8 @@ describe('Users API', function () {
                 password: [{
                     user_id: userIdFor.owner,
                     oldPassword: '',
-                    newPassword: 'Sl1m3rson1',
-                    ne2Password: 'Sl1m3rson1'
+                    newPassword: 'Sl1m3rson19',
+                    ne2Password: 'Sl1m3rson19'
                 }]
             };
             UserAPI.changePassword(payload, _.extend({}, context.owner, {id: userIdFor.owner}))
@@ -1017,9 +1403,9 @@ describe('Users API', function () {
             var payload = {
                 password: [{
                     user_id: userIdFor.owner,
-                    oldPassword: 'Sl1m3rson',
-                    newPassword: 'Sl1m3rson1',
-                    ne2Password: 'Sl1m3rson2'
+                    oldPassword: 'Sl1m3rson99',
+                    newPassword: 'Sl1m3rson19',
+                    ne2Password: 'Sl1m3rson29'
                 }]
             };
             UserAPI.changePassword(payload, _.extend({}, context.owner, {id: userIdFor.owner}))
@@ -1032,8 +1418,8 @@ describe('Users API', function () {
             var payload = {
                 password: [{
                     user_id: userIdFor.editor,
-                    newPassword: 'Sl1m3rson1',
-                    ne2Password: 'Sl1m3rson2'
+                    newPassword: 'Sl1m3rson19',
+                    ne2Password: 'Sl1m3rson29'
                 }]
             };
             UserAPI.changePassword(payload, _.extend({}, context.owner, {id: userIdFor.owner}))
@@ -1042,12 +1428,12 @@ describe('Users API', function () {
                 }).catch(checkForErrorType('ValidationError', done));
         });
 
-        it('Owner can\'t change editor password without short passwords', function (done) {
+        it('Owner can\'t change editor password with too short passwords', function (done) {
             var payload = {
                 password: [{
                     user_id: userIdFor.editor,
-                    newPassword: 'Sl',
-                    ne2Password: 'Sl'
+                    newPassword: 'only8car',
+                    ne2Password: 'only8car'
                 }]
             };
             UserAPI.changePassword(payload, _.extend({}, context.owner, {id: userIdFor.owner}))

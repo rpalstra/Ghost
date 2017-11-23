@@ -11,9 +11,6 @@
     "server": {
         "port": 2369
     },
-    "auth": {
-        "type": "password"
-    },
     "logging": {
         "level": "fatal"
     },
@@ -52,5 +49,5 @@
         "useTinfoil": true,
         "useStructuredData": true
     },
-    "minifyAssets": false
+    "useMinFiles": false
 }

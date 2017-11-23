@@ -1,4 +1,5 @@
-var getMetaDescription = require('../../../server/data/meta/description');
+var should = require('should'), // jshint ignore:line
+    getMetaDescription = require('../../../server/data/meta/description');
 
 describe('getMetaDescription', function () {
     it('should return meta_description if on data root', function () {
@@ -15,7 +16,7 @@ describe('getMetaDescription', function () {
         description.should.equal('');
     });
 
-    it('should return data author bio if on root context contains author', function () {
+    it('should not return meta description for author if on root context contains author and no meta description provided', function () {
         var description = getMetaDescription({
             author: {
                 bio: 'Just some hack building code to make the world better.'
@@ -23,7 +24,19 @@ describe('getMetaDescription', function () {
         }, {
             context: ['author']
         });
-        description.should.equal('Just some hack building code to make the world better.');
+        description.should.equal('');
+    });
+
+    it('should return meta description for author if on root context contains author and meta description provided', function () {
+        var description = getMetaDescription({
+            author: {
+                bio: 'Just some hack building code to make the world better.',
+                meta_description: 'Author meta description.'
+            }
+        }, {
+            context: ['author']
+        });
+        description.should.equal('Author meta description.');
     });
 
     it('should return data tag meta description if on root context contains tag', function () {
@@ -37,7 +50,7 @@ describe('getMetaDescription', function () {
         description.should.equal('Best tag ever!');
     });
 
-    it('should return data tag description if no meta description for tag', function () {
+    it('should not return data tag description if no meta description for tag', function () {
         var description = getMetaDescription({
             tag: {
                 meta_description: '',
@@ -46,7 +59,7 @@ describe('getMetaDescription', function () {
         }, {
             context: ['tag']
         });
-        description.should.equal('The normal description');
+        description.should.equal('');
     });
 
     it('should return data post meta description if on root context contains post', function () {
@@ -58,6 +71,48 @@ describe('getMetaDescription', function () {
             context: ['post']
         });
         description.should.equal('Best post ever!');
+    });
+
+    it('should return OG data post meta description if on root context contains post', function () {
+        var description = getMetaDescription({
+            post: {
+                meta_description: 'Best post ever!',
+                og_description: 'My custom Facebook description!'
+            }
+        }, {
+            context: ['post']
+        }, {
+            property: 'og'
+        });
+        description.should.equal('My custom Facebook description!');
+    });
+
+    it('should not return data post meta description if on root context contains post and called with OG property', function () {
+        var description = getMetaDescription({
+            post: {
+                meta_description: 'Best post ever!',
+                og_description: ''
+            }
+        }, {
+            context: ['post']
+        }, {
+            property: 'og'
+        });
+        description.should.equal('');
+    });
+
+    it('should return Twitter data post meta description if on root context contains post', function () {
+        var description = getMetaDescription({
+            post: {
+                meta_description: 'Best post ever!',
+                twitter_description: 'My custom Twitter description!'
+            }
+        }, {
+            context: ['post']
+        }, {
+            property: 'twitter'
+        });
+        description.should.equal('My custom Twitter description!');
     });
 
     it('should return data post meta description if on root context contains post for an AMP post', function () {

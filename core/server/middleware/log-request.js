@@ -7,14 +7,14 @@ var uuid = require('uuid'),
  */
 module.exports = function logRequest(req, res, next) {
     var startTime = Date.now(),
-        requestId = uuid.v1();
+        requestId = req.get('X-Request-ID') || uuid.v1();
 
     function logResponse() {
         res.responseTime = (Date.now() - startTime) + 'ms';
         req.requestId = requestId;
         req.userId = req.user ? (req.user.id ? req.user.id : req.user) : null;
 
-        if (req.err) {
+        if (req.err && req.err.statusCode !== 404) {
             logging.error({req: req, res: res, err: req.err});
         } else {
             logging.info({req: req, res: res});

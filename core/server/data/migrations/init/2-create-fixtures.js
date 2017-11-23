@@ -10,6 +10,7 @@ module.exports = function insertFixtures(options) {
 
     return Promise.mapSeries(fixtures.models, function (model) {
         logging.info('Model: ' + model.name);
+
         return fixtures.utils.addFixturesForModel(model, localOptions);
     }).then(function () {
         return Promise.mapSeries(fixtures.relations, function (relation) {

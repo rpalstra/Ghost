@@ -7,10 +7,6 @@
         },
         "debug": false
     },
-    "auth": {
-        "type": "ghost",
-        "url": "http://devauth.ghost.org:8080"
-    },
     "paths": {
         "contentPath": "content/"
     },
@@ -18,8 +14,7 @@
         "useRpcPing": false,
         "useUpdateCheck": true
     },
-    "minifyAssets": false,
-    "printErrorStack": true,
+    "useMinFiles": false,
     "caching": {
         "theme": {
             "maxAge": 0

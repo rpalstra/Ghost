@@ -1,6 +1,6 @@
-var testUtils = require('../../utils'),
-    should = require('should'),
+var should = require('should'),
     sinon = require('sinon'),
+    testUtils = require('../../utils'),
     _ = require('lodash'),
     ObjectId = require('bson-objectid'),
     Promise = require('bluebird'),
@@ -8,11 +8,12 @@ var testUtils = require('../../utils'),
     mail = require('../../../server/api/mail'),
     errors = require('../../../server/errors'),
     context = testUtils.context,
+
     sandbox = sinon.sandbox.create();
 
 describe('Invites API', function () {
     beforeEach(testUtils.teardown);
-    beforeEach(testUtils.setup('invites', 'users:roles', 'perms:invite', 'perms:init'));
+    beforeEach(testUtils.setup('invites', 'settings', 'users:roles', 'perms:invite', 'perms:init'));
 
     beforeEach(function () {
         sandbox.stub(mail, 'send', function () {
@@ -63,6 +64,22 @@ describe('Invites API', function () {
 
             it('add invite: no email provided', function (done) {
                 InvitesAPI.add({invites: [{status: 'sent'}]}, testUtils.context.owner)
+                    .then(function () {
+                        throw new Error('expected validation error');
+                    })
+                    .catch(function (err) {
+                        (err instanceof errors.ValidationError).should.eql(true);
+                        done();
+                    });
+            });
+
+            it('add invite: invite existing user', function (done) {
+                InvitesAPI.add({
+                    invites: [{
+                        email: testUtils.DataGenerator.Content.users[0].email,
+                        role_id: testUtils.roles.ids.author
+                    }]
+                }, testUtils.context.owner)
                     .then(function () {
                         throw new Error('expected validation error');
                     })
