@@ -47,7 +47,7 @@ var config         = require('./core/server/config'),
             pkg: grunt.file.readJSON('package.json'),
 
             clientFiles: [
-                'server/admin/views/default.html',
+                'server/web/admin/views/default.html',
                 'built/assets/ghost.js',
                 'built/assets/ghost.css',
                 'built/assets/vendor.js',
@@ -180,7 +180,7 @@ var config         = require('./core/server/config'),
                     options: {
                         mask: '**/*_spec.js',
                         coverageFolder: 'core/test/coverage/unit',
-                        mochaOptions: ['--timeout=15000', '--require', 'core/server/overrides'],
+                        mochaOptions: ['--timeout=15000', '--require', 'core/server/overrides', '--exit'],
                         excludes: ['core/client', 'core/server/built']
                     }
                 },
@@ -193,7 +193,7 @@ var config         = require('./core/server/config'),
                     options: {
                         coverageFolder: 'core/test/coverage/all',
                         mask: '**/*_spec.js',
-                        mochaOptions: ['--timeout=15000', '--require', 'core/server/overrides'],
+                        mochaOptions: ['--timeout=15000', '--require', 'core/server/overrides', '--exit'],
                         excludes: ['core/client', 'core/server/built']
                     }
 
@@ -738,8 +738,8 @@ var config         = require('./core/server/config'),
                 grunt.config.set('copy.admin_html', {
                     files: [{
                         cwd: '.',
-                        src: 'core/server/admin/views/default-prod.html',
-                        dest: 'core/server/admin/views/default.html'
+                        src: 'core/server/web/admin/views/default-prod.html',
+                        dest: 'core/server/web/admin/views/default.html'
                     }]
                 });
 
