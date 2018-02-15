@@ -47,6 +47,7 @@ var Promise = require('bluebird'),
     login,
     togglePermalinks,
     startGhost,
+    configureGhost,
 
     initFixtures,
     initData,
@@ -275,7 +276,7 @@ fixtures = {
 
     createExtraUsers: function createExtraUsers() {
         // grab 3 more users
-        var extraUsers = DataGenerator.Content.users.slice(2, 5);
+        var extraUsers = DataGenerator.Content.users.slice(2, 6);
 
         extraUsers = _.map(extraUsers, function (user) {
             return DataGenerator.forKnex.createUser(_.extend({}, user, {
@@ -294,7 +295,8 @@ fixtures = {
             return db.knex('roles_users').insert([
                 {id: ObjectId.generate(), user_id: extraUsers[0].id, role_id: DataGenerator.Content.roles[0].id},
                 {id: ObjectId.generate(), user_id: extraUsers[1].id, role_id: DataGenerator.Content.roles[1].id},
-                {id: ObjectId.generate(), user_id: extraUsers[2].id, role_id: DataGenerator.Content.roles[2].id}
+                {id: ObjectId.generate(), user_id: extraUsers[2].id, role_id: DataGenerator.Content.roles[2].id},
+                {id: ObjectId.generate(), user_id: extraUsers[3].id, role_id: DataGenerator.Content.roles[4].id}
             ]);
         });
     },
@@ -370,7 +372,8 @@ fixtures = {
                 Administrator: DataGenerator.Content.roles[0].id,
                 Editor: DataGenerator.Content.roles[1].id,
                 Author: DataGenerator.Content.roles[2].id,
-                Owner: DataGenerator.Content.roles[3].id
+                Owner: DataGenerator.Content.roles[3].id,
+                Contributor: DataGenerator.Content.roles[4].id
             };
 
         // CASE: if empty db will throw SQLITE_MISUSE, hard to debug
@@ -916,8 +919,28 @@ startGhost = function startGhost(options) {
         });
 };
 
+/**
+ * Minimal configuration to start integration/unit tests.
+ */
+configureGhost = function configureGhost(sandbox) {
+    models.init();
+
+    const cacheStub = sandbox.stub(SettingsCache, 'get');
+
+    cacheStub.withArgs('active_theme').returns('casper');
+    cacheStub.withArgs('active_timezone').returns('Etc/UTC');
+    cacheStub.withArgs('permalinks').returns('/:slug/');
+
+    configUtils.set('paths:contentPath', path.join(__dirname, 'fixtures'));
+
+    configUtils.set('times:getImageSizeTimeoutInMS', 1);
+
+    return themes.init();
+};
+
 module.exports = {
     startGhost: startGhost,
+    configureGhost: configureGhost,
     teardown: teardown,
     setup: setup,
     doAuth: doAuth,
@@ -976,7 +999,15 @@ module.exports = {
         owner: {context: {user: DataGenerator.Content.users[0].id}},
         admin: {context: {user: DataGenerator.Content.users[1].id}},
         editor: {context: {user: DataGenerator.Content.users[2].id}},
-        author: {context: {user: DataGenerator.Content.users[3].id}}
+        author: {context: {user: DataGenerator.Content.users[3].id}},
+        contributor: {context: {user: DataGenerator.Content.users[7].id}}
+    },
+    permissions: {
+        owner: {user: {roles: [DataGenerator.Content.roles[3]]}},
+        admin: {user: {roles: [DataGenerator.Content.roles[0]]}},
+        editor: {user: {roles: [DataGenerator.Content.roles[1]]}},
+        author: {user: {roles: [DataGenerator.Content.roles[2]]}},
+        contributor: {user: {roles: [DataGenerator.Content.roles[4]]}},
     },
     users: {
         ids: {
@@ -986,7 +1017,9 @@ module.exports = {
             author: DataGenerator.Content.users[3].id,
             admin2: DataGenerator.Content.users[6].id,
             editor2: DataGenerator.Content.users[4].id,
-            author2: DataGenerator.Content.users[5].id
+            author2: DataGenerator.Content.users[5].id,
+            contributor: DataGenerator.Content.users[7].id,
+            contributor2: DataGenerator.Content.users[8].id
         }
     },
     roles: {
@@ -994,10 +1027,10 @@ module.exports = {
             owner: DataGenerator.Content.roles[3].id,
             admin: DataGenerator.Content.roles[0].id,
             editor: DataGenerator.Content.roles[1].id,
-            author: DataGenerator.Content.roles[2].id
+            author: DataGenerator.Content.roles[2].id,
+            contributor: DataGenerator.Content.roles[4].id
         }
     },
-
     cacheRules: {
         public: 'public, max-age=0',
         hour: 'public, max-age=' + 3600,

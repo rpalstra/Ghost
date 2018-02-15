@@ -298,14 +298,15 @@ describe('API Utils', function () {
                 allowed = ['a', 'b', 'c'],
                 options = {include: 'a,b'},
                 actualResult;
+
             actualResult = apiUtils.convertOptions(allowed)(_.clone(options));
 
             prepareIncludeStub.calledOnce.should.be.true();
             prepareIncludeStub.calledWith(options.include, allowed).should.be.true();
 
-            actualResult.should.have.hasOwnProperty('include');
-            actualResult.include.should.be.an.Array();
-            actualResult.include.should.eql(expectedResult);
+            actualResult.should.have.hasOwnProperty('withRelated');
+            actualResult.withRelated.should.be.an.Array();
+            actualResult.withRelated.should.eql(expectedResult);
         });
     });
 
@@ -660,6 +661,30 @@ describe('API Utils', function () {
                     done();
                 })
                 .catch(done);
+        });
+
+        it('should strip excludedAttrs from data if permissions function returns them', function () {
+            var testStub = sandbox.stub().resolves({excludedAttrs: ['foo']}),
+                permsStub = sandbox.stub(permissions, 'canThis').returns({
+                    testing: {
+                        test: testStub
+                    }
+                }),
+                permsFunc = apiUtils.handlePermissions('tests', 'testing'),
+                testObj = {data: {tests: [{id: 5, name: 'testing', foo: 'bar'}]}, id: 5};
+
+            return permsFunc(testObj).then(function (res) {
+                permsStub.calledOnce.should.be.true();
+                testStub.calledOnce.should.be.true();
+                testStub.calledWithExactly(5, {}).should.be.true();
+
+                should(res).deepEqual({
+                    data: {
+                        tests: [{id: 5, name: 'testing'}]
+                    },
+                    id: 5
+                });
+            });
         });
     });
 });

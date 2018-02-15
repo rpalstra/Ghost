@@ -10,7 +10,7 @@ var Promise = require('bluebird'),
     allowedIncludes = [
         'created_by', 'updated_by', 'published_by', 'author', 'tags', 'fields'
     ],
-    unsafeAttrs = ['author_id'],
+    unsafeAttrs = ['author_id', 'status'],
     posts;
 
 /**
@@ -59,8 +59,8 @@ posts = {
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
             localUtils.validate(docName, {opts: permittedOptions}),
-            localUtils.handlePublicPermissions(docName, 'browse', unsafeAttrs),
             localUtils.convertOptions(allowedIncludes, models.Post.allowedFormats),
+            localUtils.handlePublicPermissions(docName, 'browse', unsafeAttrs),
             modelQuery
         ];
 
@@ -106,8 +106,8 @@ posts = {
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
             localUtils.validate(docName, {attrs: attrs, opts: extraAllowedOptions}),
-            localUtils.handlePublicPermissions(docName, 'read', unsafeAttrs),
             localUtils.convertOptions(allowedIncludes, models.Post.allowedFormats),
+            localUtils.handlePublicPermissions(docName, 'read', unsafeAttrs),
             modelQuery
         ];
 
@@ -162,8 +162,8 @@ posts = {
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
             localUtils.validate(docName, {opts: localUtils.idDefaultOptions.concat(extraAllowedOptions)}),
-            localUtils.handlePermissions(docName, 'edit', unsafeAttrs),
             localUtils.convertOptions(allowedIncludes),
+            localUtils.handlePermissions(docName, 'edit', unsafeAttrs),
             modelQuery
         ];
 
@@ -206,8 +206,8 @@ posts = {
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
             localUtils.validate(docName),
-            localUtils.handlePermissions(docName, 'add', unsafeAttrs),
             localUtils.convertOptions(allowedIncludes),
+            localUtils.handlePermissions(docName, 'add', unsafeAttrs),
             modelQuery
         ];
 
@@ -245,8 +245,8 @@ posts = {
         // Push all of our tasks into a `tasks` array in the correct order
         tasks = [
             localUtils.validate(docName, {opts: localUtils.idDefaultOptions}),
-            localUtils.handlePermissions(docName, 'destroy', unsafeAttrs),
             localUtils.convertOptions(allowedIncludes),
+            localUtils.handlePermissions(docName, 'destroy', unsafeAttrs),
             deletePost
         ];
 
