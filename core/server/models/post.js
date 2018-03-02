@@ -20,6 +20,22 @@ Post = ghostBookshelf.Model.extend({
 
     tableName: 'posts',
 
+    /**
+     * ## NOTE:
+     * We define the defaults on the schema (db) and model level.
+     * When inserting resources, the defaults are available **after** calling `.save`.
+     * But they are available when the model hooks are triggered (e.g. onSaving).
+     * It might be useful to keep them in the model layer for any connected logic.
+     *
+     * e.g. if `model.get('status') === draft; do something;
+     */
+    defaults: function defaults() {
+        return {
+            uuid: uuid.v4(),
+            status: 'draft'
+        };
+    },
+
     relationships: ['tags'],
 
     /**
@@ -47,13 +63,6 @@ Post = ghostBookshelf.Model.extend({
         }
 
         common.events.emit(resourceType + '.' + event, this, options);
-    },
-
-    defaults: function defaults() {
-        return {
-            uuid: uuid.v4(),
-            status: 'draft'
-        };
     },
 
     /**
@@ -202,7 +211,7 @@ Post = ghostBookshelf.Model.extend({
             //  and deduplicate upper/lowercase tags
             _.each(this.get('tags'), function each(item) {
                 for (i = 0; i < tagsToSave.length; i = i + 1) {
-                    if (tagsToSave[i].name.toLocaleLowerCase() === item.name.toLocaleLowerCase()) {
+                    if (tagsToSave[i].name && item.name && tagsToSave[i].name.toLocaleLowerCase() === item.name.toLocaleLowerCase()) {
                         return;
                     }
                 }
@@ -322,7 +331,9 @@ Post = ghostBookshelf.Model.extend({
     },
 
     tags: function tags() {
-        return this.belongsToMany('Tag').withPivot('sort_order').query('orderBy', 'sort_order', 'ASC');
+        return this.belongsToMany('Tag', 'posts_tags', 'post_id', 'tag_id')
+            .withPivot('sort_order')
+            .query('orderBy', 'sort_order', 'ASC');
     },
 
     fields: function fields() {
@@ -657,12 +668,19 @@ Post = ghostBookshelf.Model.extend({
             origArgs = _.toArray(arguments).slice(1);
 
             // Get the actual post model
-            return this.findOne({id: postModelOrId, status: 'all'}).then(function then(foundPostModel) {
-                // Build up the original args but substitute with actual model
-                var newArgs = [foundPostModel].concat(origArgs);
+            return this.findOne({id: postModelOrId, status: 'all'})
+                .then(function then(foundPostModel) {
+                    if (!foundPostModel) {
+                        throw new common.errors.NotFoundError({
+                            message: common.i18n.t('errors.models.posts.postNotFound')
+                        });
+                    }
 
-                return self.permissible.apply(self, newArgs);
-            });
+                    // Build up the original args but substitute with actual model
+                    var newArgs = [foundPostModel].concat(origArgs);
+
+                    return self.permissible.apply(self, newArgs);
+                });
         }
 
         function isChanging(attr) {
