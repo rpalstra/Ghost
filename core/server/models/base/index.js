@@ -49,11 +49,19 @@ ghostBookshelf.plugin('bookshelf-relations', {
     hooks: {
         belongsToMany: {
             after: function (existing, targets, options) {
-                // reorder tags
+                // reorder tags/authors
+                var queryOptions = {
+                    query: {
+                        where: {}
+                    }
+                };
+
                 return Promise.each(targets.models, function (target, index) {
+                    queryOptions.query.where[existing.relatedData.otherKey] = target.id;
+
                     return existing.updatePivot({
                         sort_order: index
-                    }, _.extend({}, options, {query: {where: {tag_id: target.id}}}));
+                    }, _.extend({}, options, queryOptions));
                 });
             },
             beforeRelationCreation: function onCreatingRelation(model, data) {
@@ -73,6 +81,11 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
     // Bookshelf `hasTimestamps` - handles created_at and updated_at properties
     hasTimestamps: true,
 
+    // https://github.com/bookshelf/bookshelf/commit/a55db61feb8ad5911adb4f8c3b3d2a97a45bd6db
+    parsedIdAttribute: function () {
+        return false;
+    },
+
     // Ghost option handling - get permitted attributes from server/data/schema.js, where the DB schema is defined
     permittedAttributes: function permittedAttributes() {
         return _.keys(schema.tables[this.tableName]);
@@ -87,16 +100,28 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
     initialize: function initialize() {
         var self = this;
 
+        // NOTE: triggered before `creating`/`updating`
+        this.on('saving', function onSaving(newObj, attrs, options) {
+            if (options.method === 'insert') {
+                // id = 0 is still a valid value for external usage
+                if (_.isUndefined(newObj.id) || _.isNull(newObj.id)) {
+                    newObj.setId();
+                }
+            }
+        });
+
         [
             'fetching',
             'fetching:collection',
             'fetched',
+            'fetched:collection',
             'creating',
             'created',
             'updating',
             'updated',
             'destroying',
             'destroyed',
+            'saving',
             'saved'
         ].forEach(function (eventName) {
             var functionName = 'on' + eventName[0].toUpperCase() + eventName.slice(1);
@@ -115,16 +140,6 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             self.on(eventName, function eventTriggered() {
                 return this[functionName].apply(this, arguments);
             });
-        });
-
-        this.on('saving', function onSaving() {
-            var self = this,
-                args = arguments;
-
-            return Promise.resolve(self.onSaving.apply(self, args))
-                .then(function validated() {
-                    return Promise.resolve(self.onValidate.apply(self, args));
-                });
         });
 
         // NOTE: Please keep here. If we don't initialize the parent, bookshelf-relations won't work.
@@ -160,6 +175,25 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         }
     },
 
+    onSaving: function onSaving(newObj) {
+        // Remove any properties which don't belong on the model
+        this.attributes = this.pick(this.permittedAttributes());
+        // Store the previous attributes so we can tell what was updated later
+        this._updatedAttributes = newObj.previousAttributes();
+
+        /**
+         * Bookshelf keeps none valid model attributes in `model.changed`. This causes problems
+         * when detecting if a model has changed. Bookshelf detects changed attributes too early.
+         * So we have to manually remove invalid model attributes from this object.
+         *
+         * e.g. if you pass `tag.parent` into the model layer, but the value has not changed,
+         * the attribute (`tag.parent`) is still kept in the `changed` object. This is wrong.
+         *
+         * TLDR; only keep valid model attributes in the changed object
+         */
+        this.changed = _.pick(this.changed, Object.keys(this.attributes));
+    },
+
     /**
      * Adding resources implies setting these properties on the server side
      * - set `created_by` based on the context
@@ -170,35 +204,31 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * Exceptions: internal context or importing
      */
     onCreating: function onCreating(newObj, attr, options) {
-        // id = 0 is still a valid value for external usage
-        if (_.isUndefined(newObj.id) || _.isNull(newObj.id)) {
-            newObj.setId();
-        }
-
         if (schema.tables[this.tableName].hasOwnProperty('created_by')) {
             if (!options.importing || (options.importing && !this.get('created_by'))) {
                 this.set('created_by', this.contextUser(options));
             }
         }
 
-        if (!options.importing) {
-            this.set('updated_by', this.contextUser(options));
+        if (schema.tables[this.tableName].hasOwnProperty('updated_by')) {
+            if (!options.importing) {
+                this.set('updated_by', this.contextUser(options));
+            }
         }
 
-        if (!newObj.get('created_at')) {
-            newObj.set('created_at', new Date());
+        if (schema.tables[this.tableName].hasOwnProperty('created_at')) {
+            if (!newObj.get('created_at')) {
+                newObj.set('created_at', new Date());
+            }
         }
 
-        if (!newObj.get('updated_at')) {
-            newObj.set('updated_at', new Date());
+        if (schema.tables[this.tableName].hasOwnProperty('updated_at')) {
+            if (!newObj.get('updated_at')) {
+                newObj.set('updated_at', new Date());
+            }
         }
-    },
 
-    onSaving: function onSaving(newObj) {
-        // Remove any properties which don't belong on the model
-        this.attributes = this.pick(this.permittedAttributes());
-        // Store the previous attributes so we can tell what was updated later
-        this._updatedAttributes = newObj.previousAttributes();
+        return Promise.resolve(this.onValidate(newObj, attr, options));
     },
 
     /**
@@ -214,19 +244,32 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      *   - if no context
      */
     onUpdating: function onUpdating(newObj, attr, options) {
-        if (!options.importing) {
-            this.set('updated_by', this.contextUser(options));
+        if (schema.tables[this.tableName].hasOwnProperty('updated_by')) {
+            if (!options.importing) {
+                this.set('updated_by', this.contextUser(options));
+            }
         }
 
         if (options && options.context && !options.internal && !options.importing) {
-            if (newObj.hasDateChanged('created_at', {beforeWrite: true})) {
-                newObj.set('created_at', this.previous('created_at'));
+            if (schema.tables[this.tableName].hasOwnProperty('created_at')) {
+                if (newObj.hasDateChanged('created_at', {beforeWrite: true})) {
+                    newObj.set('created_at', this.previous('created_at'));
+                }
             }
 
-            if (newObj.hasChanged('created_by')) {
-                newObj.set('created_by', this.previous('created_by'));
+            if (schema.tables[this.tableName].hasOwnProperty('created_by')) {
+                if (newObj.hasChanged('created_by')) {
+                    newObj.set('created_by', this.previous('created_by'));
+                }
             }
         }
+
+        // CASE: you only change the `updated_at` property. This is not allowed.
+        if (newObj.hasChanged() && Object.keys(newObj.changed).length === 1 && newObj.changed.hasOwnProperty('updated_at')) {
+            newObj.set('updated_at', this.previous('updated_at'));
+        }
+
+        return Promise.resolve(this.onValidate(newObj, attr, options));
     },
 
     /**
