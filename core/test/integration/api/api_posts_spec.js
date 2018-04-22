@@ -61,6 +61,14 @@ describe('Post API', function () {
 
     describe('Browse', function () {
         beforeEach(function () {
+            return db.knex('posts_authors').insert({
+                id: ObjectId.generate(),
+                post_id: testUtils.DataGenerator.forKnex.posts[0].id,
+                author_id: testUtils.DataGenerator.forKnex.users[1].id
+            });
+        });
+
+        beforeEach(function () {
             localSettingsCache.permalinks = '/:slug/';
         });
 
@@ -91,7 +99,7 @@ describe('Post API', function () {
         it('can fetch featured posts for user 1', function (done) {
             PostAPI.browse(_.merge({filter: 'featured:true'}, testUtils.context.owner)).then(function (results) {
                 should.exist(results.posts);
-                results.posts.length.should.eql(4);
+                results.posts.length.should.eql(2);
                 results.posts[0].featured.should.eql(true);
                 done();
             }).catch(done);
@@ -100,7 +108,7 @@ describe('Post API', function () {
         it('can fetch featured posts for user 2', function (done) {
             PostAPI.browse(_.merge({filter: 'featured:true'}, testUtils.context.admin)).then(function (results) {
                 should.exist(results.posts);
-                results.posts.length.should.eql(4);
+                results.posts.length.should.eql(2);
                 results.posts[0].featured.should.eql(true);
                 done();
             }).catch(done);
@@ -112,7 +120,7 @@ describe('Post API', function () {
                 filter: 'featured:false'
             }, testUtils.context.owner)).then(function (results) {
                 should.exist(results.posts);
-                results.posts.length.should.eql(1);
+                results.posts.length.should.eql(4);
                 results.posts[0].featured.should.eql(false);
 
                 done();
@@ -387,6 +395,8 @@ describe('Post API', function () {
                 _.each(results.posts, function (post) {
                     post.primary_author.slug.should.eql('joe-bloggs');
                 });
+
+                _.find(results.posts, {id: testUtils.DataGenerator.forKnex.posts[0].id}).authors.length.should.eql(2);
 
                 done();
             }).catch(done);
