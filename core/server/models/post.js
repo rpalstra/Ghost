@@ -1,5 +1,3 @@
-'use strict';
-
 // # Post Model
 var _ = require('lodash'),
     uuid = require('uuid'),
@@ -11,6 +9,7 @@ var _ = require('lodash'),
     htmlToText = require('html-to-text'),
     ghostBookshelf = require('./base'),
     config = require('../config'),
+    labs = require('../services/labs'),
     converters = require('../lib/mobiledoc/converters'),
     urlService = require('../services/url'),
     relations = require('./relations'),
@@ -187,7 +186,7 @@ Post = ghostBookshelf.Model.extend({
             prevSlug = this.previous('slug'),
             publishedAt = this.get('published_at'),
             publishedAtHasChanged = this.hasDateChanged('published_at', {beforeWrite: true}),
-            mobiledoc = this.get('mobiledoc'),
+            mobiledoc = JSON.parse(this.get('mobiledoc') || null),
             generatedFields = ['html', 'plaintext'],
             tagsToSave,
             ops = [];
@@ -251,8 +250,36 @@ Post = ghostBookshelf.Model.extend({
             }
         });
 
+        // render mobiledoc to HTML. Switch render version if Koenig is enabled
+        // or has been edited with Koenig and is no longer compatible with the
+        // Ghost 1.0 markdown-only renderer
+        // TODO: re-render all content and remove the version toggle for Ghost 2.0
         if (mobiledoc) {
-            this.set('html', converters.mobiledocConverter.render(JSON.parse(mobiledoc)));
+            let version = 1;
+            let koenigEnabled = labs.isSet('koenigEditor') === true;
+
+            let mobiledocIsCompatibleWithV1 = function mobiledocIsCompatibleWithV1(doc) {
+                if (doc
+                    && doc.markups.length === 0
+                    && doc.cards.length === 1
+                    && doc.cards[0][0].match(/(?:card-)?markdown/)
+                    && doc.sections.length === 1
+                    && doc.sections[0].length === 2
+                    && doc.sections[0][0] === 10
+                    && doc.sections[0][1] === 0
+                ) {
+                    return true;
+                }
+
+                return false;
+            };
+
+            if (koenigEnabled || !mobiledocIsCompatibleWithV1(mobiledoc)) {
+                version = 2;
+            }
+
+            let html = converters.mobiledocConverter.render(mobiledoc, version);
+            this.set('html', html);
         }
 
         if (this.hasChanged('html') || !this.get('plaintext')) {
@@ -375,7 +402,7 @@ Post = ghostBookshelf.Model.extend({
      *     - `author_id`: /:author/:slug, /:primary_author/:slug
      *   - @TODO: with channels, we no longer need these
      *     - because the url service pre-generates urls based on the resources
-     *     - you can ask `urlService.getUrl(post.id)`
+     *     - you can ask `urlService.getUrlByResourceId(post.id)`
      *   - @TODO: there is currently a bug in here
      *     - you request `fields=title,url`
      *     - you don't use `include=tags`
