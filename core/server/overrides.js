@@ -1,6 +1,12 @@
-'use strict';
-
 const moment = require('moment-timezone');
+
+/**
+ * oembed-parser uses promise-wtf to extend the global Promise with .finally
+ *   - require it before global Bluebird Promise override so that promise-wtf
+ *     doesn't error due to Bluebird's Promise already having a .finally
+ *   - https://github.com/ndaidong/promise-wtf/issues/25
+ */
+const {extract, hasProvider} = require('oembed-parser'); // eslint-disable-line
 
 /**
  * force UTC

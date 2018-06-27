@@ -172,6 +172,7 @@
         },
         "general": {
             "maintenance": "Ghost is currently undergoing maintenance, please wait a moment then retry.",
+            "maintenanceUrlService": "Ghost is starting up, please wait a moment then retry.",
             "requiredOnFuture": "This will be required in future. Please see {link}",
             "internalError": "Something went wrong.",
             "jsonParse": "Could not parse JSON: {context}."
@@ -374,6 +375,7 @@
                 "noPermissionToEditThemes": "You do not have permission to edit themes.",
                 "themeDoesNotExist": "Theme does not exist.",
                 "invalidTheme": "Theme is not compatible or contains errors.",
+                "invalidThemeName": "Please select a valid theme.",
                 "missingFile": "Please select a theme.",
                 "invalidFile": "Please select a valid zip file.",
                 "overrideCasper": "Please rename your zip, it's not allowed to override the default casper theme.",
@@ -404,6 +406,7 @@
             "utils": {
                 "noPermissionToCall": "You do not have permission to {method} {docName}",
                 "noRootKeyProvided": "No root key ('{docName}') provided.",
+                "invalidStructure": "No valid object structure provided for: {key}",
                 "invalidIdProvided": "Invalid id provided."
             },
             "invites": {
@@ -421,6 +424,10 @@
             },
             "webhooks": {
                 "webhookAlreadyExists": "A webhook for requested event with supplied target_url already exists."
+            },
+            "oembed": {
+                "noUrlProvided": "No url provided.",
+                "unknownProvider": "No provider found for supplied URL."
             }
         },
         "data": {
@@ -466,6 +473,15 @@
                     "error": "The {service} service was unable to send a ping request, your blog will continue to function.",
                     "help": "If you get this error repeatedly, please seek help on {url}."
                 }
+            },
+            "settings": {
+                "yaml": {
+                    "error": "Could not parse {file}: {context}.",
+                    "help": "Check your {file} file for typos and fix the named issues.",
+                    "validate": "The following definition \"{at}\" is invalid: {reason}"
+                },
+                "loader": "Error trying to load YAML setting for {setting} from '{path}'.",
+                "ensureSettings": "Error trying to access settings files in {path}."
             }
         },
         "errors": {

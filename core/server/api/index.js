@@ -6,7 +6,6 @@
 
 var _ = require('lodash'),
     Promise = require('bluebird'),
-    config = require('../config'),
     models = require('../models'),
     urlService = require('../services/url'),
     configuration = require('./configuration'),
@@ -30,6 +29,7 @@ var _ = require('lodash'),
     exporter = require('../data/export'),
     slack = require('./slack'),
     webhooks = require('./webhooks'),
+    oembed = require('./oembed'),
 
     http,
     addHeaders,
@@ -103,7 +103,8 @@ cacheInvalidationHeader = function cacheInvalidationHeader(req, result) {
             if (hasStatusChanged || wasPublishedUpdated) {
                 return INVALIDATE_ALL;
             } else {
-                return urlService.utils.urlFor({relativeUrl: urlService.utils.urlJoin('/', config.get('routeKeywords').preview, post.uuid, '/')});
+                // routeKeywords.preview: 'p'
+                return urlService.utils.urlFor({relativeUrl: urlService.utils.urlJoin('/p', post.uuid, '/')});
             }
         }
     }
@@ -317,7 +318,8 @@ module.exports = {
     themes: themes,
     invites: invites,
     redirects: redirects,
-    webhooks: webhooks
+    webhooks: webhooks,
+    oembed: oembed
 };
 
 /**

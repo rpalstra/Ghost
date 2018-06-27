@@ -5,6 +5,7 @@ var Promise = require('bluebird'),
     urlService = require('../services/url'),
     models = require('../models'),
     config = require('../config'),
+    labs = require('../services/labs'),
     settingsCache = require('../services/settings/cache'),
     ghostVersion = require('../lib/ghost-version'),
     configuration;
@@ -26,10 +27,9 @@ function getAboutConfig() {
 function getBaseConfig() {
     return {
         useGravatar: !config.isPrivacyDisabled('useGravatar'),
-        publicAPI: config.get('publicAPI') === true,
+        publicAPI: labs.isSet('publicAPI'),
         blogUrl: urlService.utils.urlFor('home', true),
         blogTitle: settingsCache.get('title'),
-        routeKeywords: config.get('routeKeywords'),
         clientExtensions: config.get('clientExtensions'),
         enableDeveloperExperiments: config.get('enableDeveloperExperiments')
     };
