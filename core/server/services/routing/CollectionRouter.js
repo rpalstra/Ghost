@@ -1,6 +1,5 @@
 const debug = require('ghost-ignition').debug('services:routing:collection-router');
 const common = require('../../lib/common');
-const settingsCache = require('../settings/cache');
 const urlService = require('../url');
 const ParentRouter = require('./ParentRouter');
 
@@ -9,8 +8,10 @@ const middlewares = require('./middlewares');
 const RSSRouter = require('./RSSRouter');
 
 class CollectionRouter extends ParentRouter {
-    constructor(mainRoute, object) {
+    constructor(mainRoute, object, RESOURCE_CONFIG) {
         super('CollectionRouter');
+
+        this.RESOURCE_CONFIG = RESOURCE_CONFIG.QUERY.post;
 
         this.routerName = mainRoute === '/' ? 'index' : mainRoute.replace(/\//g, '');
 
@@ -29,19 +30,10 @@ class CollectionRouter extends ParentRouter {
         // @NOTE: see helpers/templates - we use unshift to prepend the templates
         this.templates = (object.templates || []).reverse();
 
-        this.filter = object.filter || 'page:false';
+        this.filter = object.filter;
         this.data = object.data || {query: {}, router: {}};
         this.order = object.order;
         this.limit = object.limit;
-
-        /**
-         * @deprecated Remove in Ghost 2.0
-         */
-        if (this.permalinks.originalValue.match(/globals\.permalinks/)) {
-            this.permalinks.originalValue = this.permalinks.originalValue.replace('{globals.permalinks}', '{settings.permalinks}');
-            this.permalinks.value = this.permalinks.originalValue.replace('{settings.permalinks}', settingsCache.get('permalinks'));
-            this.permalinks.value = urlService.utils.deduplicateDoubleSlashes(this.permalinks.value);
-        }
 
         this.permalinks.getValue = (options) => {
             options = options || {};
@@ -76,12 +68,15 @@ class CollectionRouter extends ParentRouter {
 
         // REGISTER: is rss enabled?
         if (this.rss) {
-            this.rssRouter =  new RSSRouter();
+            this.rssRouter = new RSSRouter();
             this.mountRouter(this.route.value, this.rssRouter.router());
         }
 
         // REGISTER: context middleware for entries
         this.router().use(this._prepareEntryContext.bind(this));
+
+        // REGISTER: page/post resource redirects
+        this.router().param('slug', this._respectDominantRouter.bind(this));
 
         // REGISTER: permalinks e.g. /:slug/, /podcast/:slug
         this.mountRoute(this.permalinks.getValue({withUrlOptions: true}), controllers.entry);
@@ -92,8 +87,6 @@ class CollectionRouter extends ParentRouter {
     /**
      * We attach context information of the router to the request.
      * By this we can e.g. access the router options in controllers.
-     *
-     * @TODO: Why do we need two context objects? O_O - refactor this out
      */
     _prepareEntriesContext(req, res, next) {
         res.routerOptions = {
@@ -103,6 +96,7 @@ class CollectionRouter extends ParentRouter {
             order: this.order,
             permalinks: this.permalinks.getValue({withUrlOptions: true}),
             resourceType: this.getResourceType(),
+            query: this.RESOURCE_CONFIG,
             context: this.context,
             frontPageTemplate: 'home',
             templates: this.templates,
@@ -122,14 +116,6 @@ class CollectionRouter extends ParentRouter {
 
     _listeners() {
         /**
-         * @deprecated Remove in Ghost 2.0
-         */
-        if (this.getPermalinks() && this.getPermalinks().originalValue.match(/settings\.permalinks/)) {
-            this._onPermalinksEditedListener = this._onPermalinksEdited.bind(this);
-            common.events.on('settings.permalinks.edited', this._onPermalinksEditedListener);
-        }
-
-        /**
          * CASE: timezone changes
          *
          * If your permalink contains a date reference, we have to regenerate the urls.
@@ -140,22 +126,9 @@ class CollectionRouter extends ParentRouter {
         common.events.on('settings.active_timezone.edited', this._onTimezoneEditedListener);
     }
 
-    /**
-     * We unmount and mount the permalink url. This enables the ability to change urls on runtime.
-     */
-    _onPermalinksEdited() {
-        this.unmountRoute(this.permalinks.getValue({withUrlOptions: true}));
-
-        this.permalinks.value = this.permalinks.originalValue.replace('{settings.permalinks}', settingsCache.get('permalinks'));
-        this.permalinks.value = urlService.utils.deduplicateDoubleSlashes(this.permalinks.value);
-
-        this.mountRoute(this.permalinks.getValue({withUrlOptions: true}), controllers.entry);
-        this.emit('updated');
-    }
-
     _onTimezoneEdited(settingModel) {
         const newTimezone = settingModel.attributes.value,
-            previousTimezone = settingModel._updatedAttributes.value;
+            previousTimezone = settingModel._previousAttributes.value;
 
         if (newTimezone === previousTimezone) {
             return;
@@ -168,7 +141,7 @@ class CollectionRouter extends ParentRouter {
     }
 
     getResourceType() {
-        return 'posts';
+        return this.RESOURCE_CONFIG.resourceAlias || this.RESOURCE_CONFIG.resource;
     }
 
     getRoute(options) {
@@ -186,10 +159,6 @@ class CollectionRouter extends ParentRouter {
     }
 
     reset() {
-        if (this._onPermalinksEditedListener) {
-            common.events.removeListener('settings.permalinks.edited', this._onPermalinksEditedListener);
-        }
-
         if (this._onTimezoneEditedListener) {
             common.events.removeListener('settings.active_timezone.edited', this._onTimezoneEditedListener);
         }

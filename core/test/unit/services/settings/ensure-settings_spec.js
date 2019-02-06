@@ -6,19 +6,17 @@ const sinon = require('sinon'),
     configUtils = require('../../../utils/configUtils'),
     common = require('../../../../server/lib/common'),
 
-    ensureSettings = require('../../../../server/services/settings/ensure-settings'),
-
-    sandbox = sinon.sandbox.create();
+    ensureSettings = require('../../../../server/services/settings/ensure-settings');
 
 describe('UNIT > Settings Service:', function () {
     beforeEach(function () {
         configUtils.set('paths:contentPath', path.join(__dirname, '../../../utils/fixtures/'));
-        sandbox.stub(fs, 'readFile');
-        sandbox.stub(fs, 'copy');
+        sinon.stub(fs, 'readFile');
+        sinon.stub(fs, 'copy');
     });
 
     afterEach(function () {
-        sandbox.restore();
+        sinon.restore();
         configUtils.restore();
     });
 
@@ -82,108 +80,6 @@ describe('UNIT > Settings Service:', function () {
                     fs.readFile.calledOnce.should.be.true();
                     fs.copy.called.should.be.false();
                 });
-        });
-    });
-
-    describe('Migrations: home.hbs', function () {
-        it('routes.yaml has modifications', function () {
-            fs.readFile.withArgs(path.join(__dirname, '../../../utils/fixtures/settings/routes.yaml'), 'utf8').resolves('' +
-            'routes:\n' +
-                '\n' +
-                'collections:\n' +
-                '  /:\n' +
-                '    permalink: \'{globals.permalinks}\' # special 1.0 compatibility setting. See the docs for details.\n' +
-                '    template:\n' +
-                '      - index\n' +
-                '\n' +
-                'taxonomies:\n' +
-                '  tag: /tag/{slug}/\n' +
-                '  author: /author/{slug}/' + '' +
-                '\n'
-            );
-
-            return ensureSettings(['routes']).then(() => {
-                fs.readFile.callCount.should.be.eql(1);
-                fs.copy.called.should.be.false();
-            });
-        });
-
-        it('routes.yaml is old routes.yaml', function () {
-            const expectedDefaultSettingsPath = path.join(__dirname, '../../../../server/services/settings/default-routes.yaml');
-            const expectedContentPath = path.join(__dirname, '../../../utils/fixtures/settings/routes.yaml');
-
-            fs.readFile.withArgs(path.join(__dirname, '../../../utils/fixtures/settings/routes.yaml'), 'utf8').resolves('' +
-                'routes:\n' +
-                '\n' +
-                'collections:\n' +
-                '  /:\n' +
-                '    permalink: \'{globals.permalinks}\' # special 1.0 compatibility setting. See the docs for details.\n' +
-                '    template:\n' +
-                '      - home\n' +
-                '      - index\n' +
-                '\n' +
-                'taxonomies:\n' +
-                '  tag: /tag/{slug}/\n' +
-                '  author: /author/{slug}/' +
-                '\n'
-            );
-
-            fs.copy.withArgs(expectedDefaultSettingsPath, expectedContentPath).resolves();
-
-            return ensureSettings(['routes']).then(() => {
-                fs.readFile.callCount.should.be.eql(1);
-                fs.copy.called.should.be.true();
-            });
-        });
-
-        it('routes.yaml is old routes.yaml', function () {
-            const expectedDefaultSettingsPath = path.join(__dirname, '../../../../server/services/settings/default-routes.yaml');
-            const expectedContentPath = path.join(__dirname, '../../../utils/fixtures/settings/routes.yaml');
-
-            fs.readFile.withArgs(path.join(__dirname, '../../../utils/fixtures/settings/routes.yaml'), 'utf8').resolves('' +
-                'routes:\n' +
-                '\n\n' +
-                'collections:\n' +
-                '  /:\n' +
-                '    permalink: \'{globals.permalinks}\' # special 1.0 compatibility setting. See the docs for details.\n' +
-                '    template:\n' +
-                '      - home\n' +
-                '      - index\n' +
-                '\n\r' +
-                'taxonomies:      \n' +
-                '  tag: /tag/{slug}/\n' +
-                '  author: /author/{slug}/' +
-                '\t' +
-                '\n'
-            );
-
-            fs.copy.withArgs(expectedDefaultSettingsPath, expectedContentPath).resolves();
-
-            return ensureSettings(['routes']).then(() => {
-                fs.readFile.callCount.should.be.eql(1);
-                fs.copy.called.should.be.true();
-            });
-        });
-
-        it('routes.yaml has modifications, do not replace', function () {
-            fs.readFile.withArgs(path.join(__dirname, '../../../utils/fixtures/settings/routes.yaml'), 'utf8').resolves('' +
-                'routes:\n' +
-                '  /about/: about' +
-                '\n' +
-                'collections:\n' +
-                '  /:\n' +
-                '    permalink: \'{globals.permalinks}\' # special 1.0 compatibility setting. See the docs for details.\n' +
-                '\n' +
-                'taxonomies:\n' +
-                '  tag: /categories/{slug}/\n' +
-                '  author: /author/{slug}/' + '' +
-                '\n'
-            );
-
-            return ensureSettings(['routes']).then(() => {
-                fs.readFile.callCount.should.be.eql(1);
-                fs.copy.called.should.be.false();
-            });
         });
     });
 });

@@ -126,8 +126,7 @@ class Queue extends EventEmitter {
                     err: err
                 }));
 
-                // just try again
-                this.run(options);
+                // @NOTE: The url service stays in maintenance mode. There is nothing we can do if an url generator fails.
             }
         } else {
             // CASE 1: zero tolerance, kill run fn
@@ -143,6 +142,8 @@ class Queue extends EventEmitter {
                 debug('ended (2)', event, action);
                 this.emit('ended', event);
             } else {
+                debug('retry', event, action, this.toNotify[action].timeoutInMS);
+
                 this.toNotify[action].timeoutInMS = this.toNotify[action].timeoutInMS * 1.1;
 
                 this.toNotify[action].timeout = setTimeout(() => {

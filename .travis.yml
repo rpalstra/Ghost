@@ -1,22 +1,16 @@
 language: node_js
-# When changing node version also update it on lines 31 and 49.
+# When changing node version also update it on lines 23 and 52.
 node_js:
+  - "10"
   - "8"
   - "6"
 
 sudo: false
 
 cache:
+  yarn: true
   directories:
     - node_modules
-
-addons:
-  apt:
-    sources:
-      - sourceline: 'deb https://dl.yarnpkg.com/debian/ stable main'
-        key_url: 'https://dl.yarnpkg.com/debian/pubkey.gpg'
-    packages:
-      - yarn
 
 env:
   global:
@@ -27,7 +21,7 @@ env:
 
 matrix:
   include:
-    - node_js: "8"
+    - node_js: "10"
       env: TEST_SUITE=lint
   fast_finish: true
 
@@ -37,15 +31,26 @@ branches:
 
 before_install:
   - if [ $DB == "mysql" ]; then mysql -e 'create database ghost_testing'; fi
+  - curl -sSL https://dl.yarnpkg.com/debian/pubkey.gpg | sudo -E apt-key add -
+  - echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee -a /etc/apt/sources.list >/dev/null
+  - sudo -E apt-get -yq update &>> ~/apt-get-update.log
+  - sudo -E apt-get -yq --no-install-suggests --no-install-recommends $TRAVIS_APT_OPTS install yarn
 
 install:
   - yarn
   - if [ "$DB" == "sqlite3" ]; then yarn add --force sqlite3; fi # fix sqlite caching issues
 
+script: |
+  if [ "${TRAVIS_EVENT_TYPE}" = "cron" && "${TEST_SUITE}" != "lint" ]; then
+    yarn test:regression
+  else
+    yarn test
+  fi
+
 after_success:
   - |
       if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
-        if [[ "$DB" = "sqlite3" && "$TRAVIS_NODE_VERSION" = "8" ]]; then
+        if [[ "$DB" = "sqlite3" && "$TRAVIS_NODE_VERSION" = "10" ]]; then
           echo "Generate coverage..."
           grunt coverage
           npm install -g codeclimate-test-reporter
@@ -56,3 +61,8 @@ after_success:
       else
         echo "This is a PR. No coverage generated."
       fi
+
+after_failure: |
+  if [ "${TRAVIS_EVENT_TYPE}" == "cron" ]; then
+    curl -X POST --data-urlencode "payload={\"attachments\": [{\"color\": \"danger\", \"fallback\": \"Build Failure: $TRAVIS_JOB_WEB_URL\", \"title\": \"Build Failure\", \"text\": \"$TRAVIS_JOB_WEB_URL\"}]}" $SLACK_URL
+  fi

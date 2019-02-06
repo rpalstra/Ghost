@@ -4,9 +4,7 @@ var should = require('should'),
 
     // Stuff we are testing
     helpers = require('../../../server/helpers'),
-    common = require('../../../server/lib/common'),
-
-    sandbox = sinon.sandbox.create();
+    common = require('../../../server/lib/common');
 
 describe('{{image}} helper', function () {
     var logWarnStub;
@@ -16,11 +14,11 @@ describe('{{image}} helper', function () {
     });
 
     beforeEach(function () {
-        logWarnStub = sandbox.stub(common.logging, 'warn');
+        logWarnStub = sinon.stub(common.logging, 'warn');
     });
 
     afterEach(function () {
-        sandbox.restore();
+        sinon.restore();
     });
 
     after(function () {
@@ -90,6 +88,69 @@ describe('{{image}} helper', function () {
             var rendered = helpers.img_url('http://example.com/picture.jpg', {});
             should.exist(rendered);
             rendered.should.equal('http://example.com/picture.jpg');
+        });
+    });
+
+    describe('image_sizes', function () {
+        before(function () {
+            configUtils.set({url: 'http://localhost:82832'});
+        });
+        after(function () {
+            configUtils.restore();
+        });
+        it('should output correct url for absolute paths which are internal', function () {
+            var rendered = helpers.img_url('http://localhost:82832/content/images/my-coole-img.jpg', {
+                hash: {
+                    size: 'medium',
+                },
+                data: {
+                    config: {
+                        image_sizes: {
+                            medium: {
+                                width: 400
+                            }
+                        }
+                    }
+                }
+            });
+            should.exist(rendered);
+            rendered.should.equal('http://localhost:82832/content/images/size/w400/my-coole-img.jpg');
+        });
+        it('should output the correct url for protocol relative urls', function () {
+            var rendered = helpers.img_url('//website.com/whatever/my-coole-img.jpg', {
+                hash: {
+                    size: 'medium',
+                },
+                data: {
+                    config: {
+                        image_sizes: {
+                            medium: {
+                                width: 400
+                            }
+                        }
+                    }
+                }
+            });
+            should.exist(rendered);
+            rendered.should.equal('//website.com/whatever/my-coole-img.jpg');
+        });
+        it('should output the correct url for relative paths', function () {
+            var rendered = helpers.img_url('/content/images/my-coole-img.jpg', {
+                hash: {
+                    size: 'medium',
+                },
+                data: {
+                    config: {
+                        image_sizes: {
+                            medium: {
+                                width: 400
+                            }
+                        }
+                    }
+                }
+            });
+            should.exist(rendered);
+            rendered.should.equal('/content/images/size/w400/my-coole-img.jpg');
         });
     });
 });

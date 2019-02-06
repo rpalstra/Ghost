@@ -3,7 +3,7 @@ const path = require('path'),
     middleware = require('./middleware'),
     bodyParser = require('body-parser'),
     routing = require('../../../services/routing'),
-    brute = require('../../../web/middleware/brute'),
+    web = require('../../../web'),
     templateName = 'private',
     privateRouter = express.Router();
 
@@ -11,12 +11,12 @@ function _renderer(req, res) {
     res.routerOptions = {
         type: 'custom',
         templates: templateName,
-        defaultTemplate: path.resolve(__dirname, 'views', templateName + '.hbs')
+        defaultTemplate: path.resolve(__dirname, 'views', `${templateName}.hbs`)
     };
 
     // Renderer begin
     // Format data
-    var data = {};
+    let data = {};
 
     if (res.error) {
         data.error = res.error;
@@ -36,7 +36,7 @@ privateRouter
     .post(
         bodyParser.urlencoded({extended: true}),
         middleware.isPrivateSessionAuth,
-        brute.privateBlog,
+        web.shared.middlewares.brute.privateBlog,
         middleware.authenticateProtection,
         _renderer
     );

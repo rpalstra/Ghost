@@ -27,7 +27,7 @@ const crypto = require('crypto'),
     _ = require('lodash'),
     url = require('url'),
     debug = require('ghost-ignition').debug('update-check'),
-    api = require('./api'),
+    api = require('./api').v2,
     config = require('./config'),
     urlService = require('./services/url'),
     common = require('./lib/common'),
@@ -50,7 +50,7 @@ function updateCheckError(err) {
     }, internal);
 
     err.context = common.i18n.t('errors.updateCheck.checkingForUpdatesFailed.error');
-    err.help = common.i18n.t('errors.updateCheck.checkingForUpdatesFailed.help', {url: 'https://docs.ghost.org/v1'});
+    err.help = common.i18n.t('errors.updateCheck.checkingForUpdatesFailed.help', {url: 'https://docs.ghost.org'});
     common.logging.error(err);
 }
 

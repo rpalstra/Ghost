@@ -5,11 +5,10 @@ const should = require('should'),
     urlService = require('../../../../../server/services/url'),
     controllers = require('../../../../../server/services/routing/controllers'),
     helpers = require('../../../../../server/services/routing/helpers'),
-    sandbox = sinon.sandbox.create(),
     EDITOR_URL = '/editor/';
 
 describe('Unit - services/routing/controllers/entry', function () {
-    let req, res, postLookUpStub, secureStub, renderStub, post, page;
+    let req, res, entryLookUpStub, secureStub, renderStub, post, page;
 
     beforeEach(function () {
         post = testUtils.DataGenerator.forKnex.createPost();
@@ -17,27 +16,27 @@ describe('Unit - services/routing/controllers/entry', function () {
 
         page = testUtils.DataGenerator.forKnex.createPost({page: 1});
 
-        secureStub = sandbox.stub();
-        postLookUpStub = sandbox.stub();
-        renderStub = sandbox.stub();
+        secureStub = sinon.stub();
+        entryLookUpStub = sinon.stub();
+        renderStub = sinon.stub();
 
-        sandbox.stub(helpers, 'postLookup').get(function () {
-            return postLookUpStub;
+        sinon.stub(helpers, 'entryLookup').get(function () {
+            return entryLookUpStub;
         });
 
-        sandbox.stub(helpers, 'secure').get(function () {
+        sinon.stub(helpers, 'secure').get(function () {
             return secureStub;
         });
 
-        sandbox.stub(helpers, 'renderEntry').get(function () {
+        sinon.stub(helpers, 'renderEntry').get(function () {
             return renderStub;
         });
 
-        sandbox.stub(filters, 'doFilter');
+        sinon.stub(filters, 'doFilter');
 
-        sandbox.stub(urlService.utils, 'redirectToAdmin');
-        sandbox.stub(urlService.utils, 'redirect301');
-        sandbox.stub(urlService, 'getResourceById');
+        sinon.stub(urlService.utils, 'redirectToAdmin');
+        sinon.stub(urlService.utils, 'redirect301');
+        sinon.stub(urlService, 'getResourceById');
 
         req = {
             path: '/',
@@ -53,13 +52,13 @@ describe('Unit - services/routing/controllers/entry', function () {
     });
 
     afterEach(function () {
-        sandbox.restore();
+        sinon.restore();
     });
 
     it('resource not found', function (done) {
         req.path = '/does-not-exist/';
 
-        postLookUpStub.withArgs(req.path, res.routerOptions)
+        entryLookUpStub.withArgs(req.path, res.routerOptions)
             .resolves(null);
 
         controllers.entry(req, res, function (err) {
@@ -82,9 +81,9 @@ describe('Unit - services/routing/controllers/entry', function () {
             }
         });
 
-        postLookUpStub.withArgs(req.path, res.routerOptions)
+        entryLookUpStub.withArgs(req.path, res.routerOptions)
             .resolves({
-                post: post
+                entry: post
             });
 
         renderStub.callsFake(function () {
@@ -99,10 +98,10 @@ describe('Unit - services/routing/controllers/entry', function () {
         it('isUnknownOption: true', function (done) {
             req.path = post.url;
 
-            postLookUpStub.withArgs(req.path, res.routerOptions)
+            entryLookUpStub.withArgs(req.path, res.routerOptions)
                 .resolves({
                     isUnknownOption: true,
-                    post: post
+                    entry: post
                 });
 
             controllers.entry(req, res, function (err) {
@@ -114,10 +113,10 @@ describe('Unit - services/routing/controllers/entry', function () {
         it('isEditURL: true', function (done) {
             req.path = post.url;
 
-            postLookUpStub.withArgs(req.path, res.routerOptions)
+            entryLookUpStub.withArgs(req.path, res.routerOptions)
                 .resolves({
                     isEditURL: true,
-                    post: post
+                    entry: post
                 });
 
             urlService.utils.redirectToAdmin.callsFake(function (statusCode, res, editorUrl) {
@@ -139,9 +138,9 @@ describe('Unit - services/routing/controllers/entry', function () {
                 }
             });
 
-            postLookUpStub.withArgs(req.path, res.routerOptions)
+            entryLookUpStub.withArgs(req.path, res.routerOptions)
                 .resolves({
-                    post: post
+                    entry: post
                 });
 
             controllers.entry(req, res, function (err) {
@@ -163,9 +162,9 @@ describe('Unit - services/routing/controllers/entry', function () {
                 }
             });
 
-            postLookUpStub.withArgs(req.path, res.routerOptions)
+            entryLookUpStub.withArgs(req.path, res.routerOptions)
                 .resolves({
-                    post: post
+                    entry: post
                 });
 
             urlService.utils.redirect301.callsFake(function (res, postUrl) {
@@ -192,9 +191,9 @@ describe('Unit - services/routing/controllers/entry', function () {
                 }
             });
 
-            postLookUpStub.withArgs(req.path, res.routerOptions)
+            entryLookUpStub.withArgs(req.path, res.routerOptions)
                 .resolves({
-                    post: post
+                    entry: post
                 });
 
             urlService.utils.redirect301.callsFake(function (res, postUrl) {

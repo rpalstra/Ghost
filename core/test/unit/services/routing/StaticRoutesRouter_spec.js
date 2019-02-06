@@ -1,11 +1,9 @@
 const should = require('should'),
     sinon = require('sinon'),
-    settingsCache = require('../../../../server/services/settings/cache'),
     common = require('../../../../server/lib/common'),
     controllers = require('../../../../server/services/routing/controllers'),
     StaticRoutesRouter = require('../../../../server/services/routing/StaticRoutesRouter'),
-    configUtils = require('../../../utils/configUtils'),
-    sandbox = sinon.sandbox.create();
+    configUtils = require('../../../utils/configUtils');
 
 describe('UNIT - services/routing/StaticRoutesRouter', function () {
     let req, res, next;
@@ -15,23 +13,21 @@ describe('UNIT - services/routing/StaticRoutesRouter', function () {
     });
 
     beforeEach(function () {
-        sandbox.stub(settingsCache, 'get').withArgs('permalinks').returns('/:slug/');
+        sinon.stub(common.events, 'emit');
+        sinon.stub(common.events, 'on');
 
-        sandbox.stub(common.events, 'emit');
-        sandbox.stub(common.events, 'on');
+        sinon.spy(StaticRoutesRouter.prototype, 'mountRoute');
+        sinon.spy(StaticRoutesRouter.prototype, 'mountRouter');
 
-        sandbox.spy(StaticRoutesRouter.prototype, 'mountRoute');
-        sandbox.spy(StaticRoutesRouter.prototype, 'mountRouter');
-
-        req = sandbox.stub();
-        res = sandbox.stub();
-        next = sandbox.stub();
+        req = sinon.stub();
+        res = sinon.stub();
+        next = sinon.stub();
 
         res.locals = {};
     });
 
     afterEach(function () {
-        sandbox.restore();
+        sinon.restore();
     });
 
     describe('static routes', function () {
