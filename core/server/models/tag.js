@@ -18,14 +18,20 @@ Tag = ghostBookshelf.Model.extend({
     },
 
     onCreated: function onCreated(model, attrs, options) {
+        ghostBookshelf.Model.prototype.onCreated.apply(this, arguments);
+
         model.emitChange('added', options);
     },
 
     onUpdated: function onUpdated(model, attrs, options) {
+        ghostBookshelf.Model.prototype.onUpdated.apply(this, arguments);
+
         model.emitChange('edited', options);
     },
 
     onDestroyed: function onDestroyed(model, options) {
+        ghostBookshelf.Model.prototype.onDestroyed.apply(this, arguments);
+
         model.emitChange('deleted', options);
     },
 
@@ -39,7 +45,7 @@ Tag = ghostBookshelf.Model.extend({
             this.set('visibility', 'internal');
         }
 
-        if (this.hasChanged('slug') || !this.get('slug')) {
+        if (this.hasChanged('slug') || (!this.get('slug') && this.get('name'))) {
             // Pass the new slug through the generator to strip illegal characters, detect duplicates
             return ghostBookshelf.Model.generateSlug(Tag, this.get('slug') || this.get('name'),
                 {transacting: options.transacting})

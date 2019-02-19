@@ -77,11 +77,6 @@ module.exports = {
                 include: {
                     values: ALLOWED_INCLUDES
                 }
-            },
-            data: {
-                name: {
-                    required: true
-                }
             }
         },
         permissions: true,
@@ -91,9 +86,7 @@ module.exports = {
     },
 
     edit: {
-        headers: {
-            cacheInvalidate: true
-        },
+        headers: {},
         options: [
             'id',
             'include'
@@ -116,6 +109,12 @@ module.exports = {
                         return Promise.reject(new common.errors.NotFoundError({
                             message: common.i18n.t('errors.api.tags.tagNotFound')
                         }));
+                    }
+
+                    if (model.wasChanged()) {
+                        this.headers.cacheInvalidate = true;
+                    } else {
+                        this.headers.cacheInvalidate = false;
                     }
 
                     return model;

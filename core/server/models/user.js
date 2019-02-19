@@ -44,12 +44,16 @@ User = ghostBookshelf.Model.extend({
      * Therefor we have to remove the relations manually.
      */
     onDestroying(model, options) {
+        ghostBookshelf.Model.prototype.onDestroying.apply(this, arguments);
+
         return (options.transacting || ghostBookshelf.knex)('roles_users')
             .where('user_id', model.id)
             .del();
     },
 
     onDestroyed: function onDestroyed(model, options) {
+        ghostBookshelf.Model.prototype.onDestroyed.apply(this, arguments);
+
         if (_.includes(activeStates, model.previous('status'))) {
             model.emitChange('deactivated', options);
         }
@@ -58,6 +62,8 @@ User = ghostBookshelf.Model.extend({
     },
 
     onCreated: function onCreated(model, attrs, options) {
+        ghostBookshelf.Model.prototype.onCreated.apply(this, arguments);
+
         model.emitChange('added', options);
 
         // active is the default state, so if status isn't provided, this will be an active user
@@ -67,6 +73,8 @@ User = ghostBookshelf.Model.extend({
     },
 
     onUpdated: function onUpdated(model, response, options) {
+        ghostBookshelf.Model.prototype.onUpdated.apply(this, arguments);
+
         model.statusChanging = model.get('status') !== model.previous('status');
         model.isActive = _.includes(activeStates, model.get('status'));
 
@@ -441,7 +449,7 @@ User = ghostBookshelf.Model.extend({
         }
 
         ops.push(function update() {
-            return ghostBookshelf.Model.edit.call(self, data, options).then(function then(user) {
+            return ghostBookshelf.Model.edit.call(self, data, options).then((user) => {
                 var roleId;
 
                 if (!data.roles) {
@@ -450,13 +458,13 @@ User = ghostBookshelf.Model.extend({
 
                 roleId = data.roles[0].id || data.roles[0];
 
-                return user.roles().fetch().then(function then(roles) {
+                return user.roles().fetch().then((roles) => {
                     // return if the role is already assigned
                     if (roles.models[0].id === roleId) {
                         return;
                     }
                     return ghostBookshelf.model('Role').findOne({id: roleId});
-                }).then(function then(roleToAssign) {
+                }).then((roleToAssign) => {
                     if (roleToAssign && roleToAssign.get('name') === 'Owner') {
                         return Promise.reject(
                             new common.errors.ValidationError({
@@ -467,9 +475,12 @@ User = ghostBookshelf.Model.extend({
                         // assign all other roles
                         return user.roles().updatePivot({role_id: roleId});
                     }
-                }).then(function then() {
+                }).then(() => {
                     options.status = 'all';
                     return self.findOne({id: user.id}, options);
+                }).then((model) => {
+                    model._changed = user._changed;
+                    return model;
                 });
             });
         });

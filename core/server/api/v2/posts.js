@@ -83,12 +83,16 @@ module.exports = {
         statusCode: 201,
         headers: {},
         options: [
-            'include'
+            'include',
+            'source'
         ],
         validation: {
             options: {
                 include: {
                     values: allowedIncludes
+                },
+                source: {
+                    values: ['html']
                 }
             }
         },
@@ -113,7 +117,8 @@ module.exports = {
         headers: {},
         options: [
             'include',
-            'id'
+            'id',
+            'source'
         ],
         validation: {
             options: {
@@ -122,6 +127,9 @@ module.exports = {
                 },
                 id: {
                     required: true
+                },
+                source: {
+                    values: ['html']
                 }
             }
         },
@@ -131,7 +139,7 @@ module.exports = {
         query(frame) {
             return models.Post.edit(frame.data.posts[0], frame.options)
                 .then((model) => {
-                    if (model.get('status') === 'published' ||
+                    if (model.get('status') === 'published' && model.wasChanged() ||
                         model.get('status') === 'draft' && model.previous('status') === 'published') {
                         this.headers.cacheInvalidate = true;
                     } else if (model.get('status') === 'draft' && model.previous('status') !== 'published') {

@@ -25,18 +25,23 @@ const expectedProperties = {
         .keys()
         // by default we only return html
         .without('mobiledoc', 'plaintext')
+        .without('visibility')
+        .without('locale')
         // always returns computed properties: url, comment_id, primary_tag, primary_author
         .without('author_id').concat('url', 'primary_tag', 'primary_author')
     ,
     user: _(schema.users)
         .keys()
+        .without('visibility')
         .without('password')
+        .without('locale')
         .without('ghost_auth_access_token')
+        .without('ghost_auth_id')
     ,
     tag: _(schema.tags)
         .keys()
-        // Tag API swaps parent_id to parent
-        .without('parent_id').concat('parent')
+        // unused field
+        .without('parent_id')
     ,
     setting: _(schema.settings)
         .keys()
@@ -61,14 +66,6 @@ const expectedProperties = {
     ,
     webhook: _(schema.webhooks)
             .keys()
-            .without(
-                'name',
-                'last_triggered_at',
-                'last_triggered_error',
-                'last_triggered_status',
-                'secret',
-                'integration_id'
-            )
 };
 
 _.each(expectedProperties, (value, key) => {

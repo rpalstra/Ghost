@@ -95,6 +95,8 @@ Post = ghostBookshelf.Model.extend({
      * We ensure that we are catching the event after bookshelf relations.
      */
     onSaved: function onSaved(model, response, options) {
+        ghostBookshelf.Model.prototype.onSaved.apply(this, arguments);
+
         if (options.method !== 'insert') {
             return;
         }
@@ -109,7 +111,7 @@ Post = ghostBookshelf.Model.extend({
     },
 
     onUpdated: function onUpdated(model, attrs, options) {
-        ghostBookshelf.Model.prototype.onUpdated.call(this, model, attrs, options);
+        ghostBookshelf.Model.prototype.onUpdated.apply(this, arguments);
 
         model.statusChanging = model.get('status') !== model.previous('status');
         model.isPublished = model.get('status') === 'published';
@@ -181,7 +183,7 @@ Post = ghostBookshelf.Model.extend({
     },
 
     onDestroyed: function onDestroyed(model, options) {
-        ghostBookshelf.Model.prototype.onDestroyed.call(this, model, options);
+        ghostBookshelf.Model.prototype.onDestroyed.apply(this, arguments);
 
         if (model.previous('status') === 'published') {
             model.emitChange('unpublished', Object.assign({usePreviousAttribute: true}, options));
@@ -191,6 +193,8 @@ Post = ghostBookshelf.Model.extend({
     },
 
     onDestroying: function onDestroyed(model) {
+        ghostBookshelf.Model.prototype.onDestroying.apply(this, arguments);
+
         this.handleAttachedModels(model);
     },
 
@@ -204,12 +208,16 @@ Post = ghostBookshelf.Model.extend({
         model.related('tags').once('detaching', function onDetached(collection, tag) {
             model.related('tags').once('detached', function onDetached(detachedCollection, response, options) {
                 tag.emitChange('detached', options);
+                model.emitChange('tag.detached', options);
             });
         });
 
         model.related('tags').once('attaching', function onDetached(collection, tags) {
             model.related('tags').once('attached', function onDetached(detachedCollection, response, options) {
-                tags.forEach(tag => tag.emitChange('attached', options));
+                tags.forEach((tag) => {
+                    tag.emitChange('attached', options);
+                    model.emitChange('tag.attached', options);
+                });
             });
         });
 
@@ -319,7 +327,7 @@ Post = ghostBookshelf.Model.extend({
 
         this.handleAttachedModels(model);
 
-        ghostBookshelf.Model.prototype.onSaving.call(this, model, attr, options);
+        ghostBookshelf.Model.prototype.onSaving.apply(this, arguments);
 
         // do not allow generated fields to be overridden via the API
         if (!options.migrating) {
@@ -777,6 +785,7 @@ Post = ghostBookshelf.Model.extend({
                             if (found) {
                                 // Pass along the updated attributes for checking status changes
                                 found._previousAttributes = post._previousAttributes;
+                                found._changed = post._changed;
                                 return found;
                             }
                         });

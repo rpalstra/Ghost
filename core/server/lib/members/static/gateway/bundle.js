@@ -60,6 +60,26 @@
 
     addMethod('getToken', getToken);
 
+    addMethod('createSubscription', function createSubscription({adapter, plan, stripeToken}) {
+        return fetch(`${membersApi}/subscription`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                origin,
+                adapter,
+                plan,
+                stripeToken
+            })
+        }).then((res) => {
+            if (res.ok) {
+                storage.setItem('signedin', true);
+            }
+            return res.ok;
+        });
+    });
+
     addMethod('signin', function signin({email, password}) {
         return fetch(`${membersApi}/signin`, {
             method: 'POST',
@@ -116,7 +136,7 @@
         });
     });
 
-    addMethod('request-password-reset', function signout({email}) {
+    addMethod('requestPasswordReset', function signout({email}) {
         return fetch(`${membersApi}/request-password-reset`, {
             method: 'POST',
             headers: {
@@ -131,7 +151,7 @@
         });
     });
 
-    addMethod('reset-password', function signout({token, password}) {
+    addMethod('resetPassword', function signout({token, password}) {
         return fetch(`${membersApi}/reset-password`, {
             method: 'POST',
             headers: {
@@ -147,6 +167,14 @@
                 storage.setItem('signedin', true);
             }
             return res.ok;
+        });
+    });
+
+    addMethod('getConfig', function getConfig() {
+        return fetch(`${membersApi}/config`, {
+            method: 'GET'
+        }).then((res) => {
+            return res.json();
         });
     });
 
