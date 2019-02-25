@@ -173,8 +173,6 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * If the query runs in a txn, `_previousAttributes` will be empty.
      */
     emitChange: function (model, event, options) {
-        debug(model.tableName, event);
-
         const _emit = (ghostEvent, model) => {
             if (!model.wasChanged()) {
                 return;
@@ -311,13 +309,13 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
     onCreating: function onCreating(model, attr, options) {
         if (schema.tables[this.tableName].hasOwnProperty('created_by')) {
             if (!options.importing || (options.importing && !this.get('created_by'))) {
-                this.set('created_by', this.contextUser(options));
+                this.set('created_by', String(this.contextUser(options)));
             }
         }
 
         if (schema.tables[this.tableName].hasOwnProperty('updated_by')) {
             if (!options.importing) {
-                this.set('updated_by', this.contextUser(options));
+                this.set('updated_by', String(this.contextUser(options)));
             }
         }
 
@@ -377,7 +375,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
         if (schema.tables[this.tableName].hasOwnProperty('updated_by')) {
             if (!options.importing && !options.migrating) {
-                this.set('updated_by', this.contextUser(options));
+                this.set('updated_by', String(this.contextUser(options)));
             }
         }
 
@@ -390,7 +388,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
             if (schema.tables[this.tableName].hasOwnProperty('created_by')) {
                 if (model.hasChanged('created_by')) {
-                    model.set('created_by', this.previous('created_by'));
+                    model.set('created_by', String(this.previous('created_by')));
                 }
             }
         }
@@ -917,9 +915,16 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @return {Promise(ghostBookshelf.Model)} Single Model
      */
     findOne: function findOne(data, unfilteredOptions) {
-        var options = this.filterOptions(unfilteredOptions, 'findOne');
+        const options = this.filterOptions(unfilteredOptions, 'findOne');
         data = this.filterData(data);
-        return this.forge(data).fetch(options);
+        const model = this.forge(data);
+
+        // @NOTE: The API layer decides if this option is allowed
+        if (options.filter) {
+            model.applyDefaultAndCustomFilters(options);
+        }
+
+        return model.fetch(options);
     },
 
     /**
@@ -940,17 +945,26 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
         data = this.filterData(data);
 
+        // @NOTE: The API layer decides if this option is allowed
+        if (options.filter) {
+            model.applyDefaultAndCustomFilters(options);
+        }
+
         // We allow you to disable timestamps when run migration, so that the posts `updated_at` value is the same
         if (options.importing) {
             model.hasTimestamps = false;
         }
 
-        return model.fetch(options).then(function then(object) {
-            if (object) {
-                options.method = 'update';
-                return object.save(data, options);
-            }
-        });
+        return model
+            .fetch(options)
+            .then((object) => {
+                if (object) {
+                    options.method = 'update';
+                    return object.save(data, options);
+                }
+
+                throw new common.errors.NotFoundError();
+            });
     },
 
     /**
@@ -987,6 +1001,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      */
     destroy: function destroy(unfilteredOptions) {
         const options = this.filterOptions(unfilteredOptions, 'destroy');
+
         if (!options.destroyBy) {
             options.destroyBy = {
                 id: options.id

@@ -43,7 +43,7 @@ describe('Posts API', function () {
                     const jsonResponse = res.body;
                     should.exist(jsonResponse.posts);
                     localUtils.API.checkResponse(jsonResponse, 'posts');
-                    jsonResponse.posts.should.have.length(11);
+                    jsonResponse.posts.should.have.length(13);
 
                     localUtils.API.checkResponse(
                         jsonResponse.posts[0],
@@ -74,7 +74,8 @@ describe('Posts API', function () {
                     const jsonResponse = res.body;
                     should.exist(jsonResponse.posts);
                     localUtils.API.checkResponse(jsonResponse, 'posts');
-                    jsonResponse.posts.should.have.length(11);
+                    jsonResponse.posts.should.have.length(13);
+
                     localUtils.API.checkResponse(
                         jsonResponse.posts[0],
                         'post',
@@ -116,20 +117,28 @@ describe('Posts API', function () {
     describe('edit', function () {
         it('published_at = null', function () {
             return request
-                .put(localUtils.API.getApiQuery('posts/' + testUtils.DataGenerator.Content.posts[0].id + '/'))
+                .get(localUtils.API.getApiQuery(`posts/${testUtils.DataGenerator.Content.posts[0].id}/`))
                 .set('Origin', config.get('url'))
-                .send({
-                    posts: [{published_at: null}]
-                })
-                .expect('Content-Type', /json/)
-                .expect('Cache-Control', testUtils.cacheRules.private)
                 .expect(200)
+                .then((res) => {
+                    return request
+                        .put(localUtils.API.getApiQuery('posts/' + testUtils.DataGenerator.Content.posts[0].id + '/'))
+                        .set('Origin', config.get('url'))
+                        .send({
+                            posts: [{
+                                published_at: null,
+                                updated_at: res.body.posts[0].updated_at
+                            }]
+                        })
+                        .expect('Content-Type', /json/)
+                        .expect('Cache-Control', testUtils.cacheRules.private)
+                        .expect(200);
+                })
                 .then((res) => {
                     // @NOTE: you cannot modify published_at manually, that's why the resource won't change.
                     should.not.exist(res.headers['x-cache-invalidate']);
                     should.exist(res.body.posts);
                     should.exist(res.body.posts[0].published_at);
-                    localUtils.API.checkResponse(res.body.posts[0], 'post');
                 });
         });
 
@@ -151,8 +160,6 @@ describe('Posts API', function () {
                 .then((res) => {
                     // @NOTE: you cannot modify these fields above manually, that's why the resource won't change.
                     should.not.exist(res.headers['x-cache-invalidate']);
-
-                    localUtils.API.checkResponse(res.body.posts[0], 'post');
 
                     return models.Post.findOne({
                         id: res.body.posts[0].id

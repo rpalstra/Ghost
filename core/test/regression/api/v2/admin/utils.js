@@ -20,12 +20,15 @@ const expectedProperties = {
 
     post: _(schema.posts)
         .keys()
-        // by default we only return html
-        .without('mobiledoc', 'plaintext')
+        // by default we only return mobiledoc
+        .without('html', 'plaintext')
         .without('visibility')
         .without('locale')
-        // always returns computed properties: url, comment_id, primary_tag, primary_author
-        .without('author_id').concat('url', 'primary_tag', 'primary_author')
+        .without('page')
+        .without('author_id')
+        // always returns computed properties
+        .concat('url', 'primary_tag', 'primary_author', 'excerpt')
+        .concat('authors', 'tags')
     ,
     user: _(schema.users)
         .keys()

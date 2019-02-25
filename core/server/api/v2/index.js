@@ -19,6 +19,10 @@ module.exports = {
         return require('./session');
     },
 
+    get pagesPublic() {
+        return shared.pipeline(require('./pages-public'), localUtils);
+    },
+
     get pages() {
         return shared.pipeline(require('./pages'), localUtils);
     },
@@ -41,6 +45,10 @@ module.exports = {
 
     get posts() {
         return shared.pipeline(require('./posts'), localUtils);
+    },
+
+    get postsPublic() {
+        return shared.pipeline(require('./posts-public'), localUtils);
     },
 
     get invites() {
@@ -67,8 +75,8 @@ module.exports = {
         return shared.pipeline(require('./members'), localUtils);
     },
 
-    get upload() {
-        return shared.pipeline(require('./upload'), localUtils);
+    get images() {
+        return shared.pipeline(require('./images'), localUtils);
     },
 
     get tags() {
@@ -99,8 +107,8 @@ module.exports = {
         return shared.pipeline(require('./authors'), localUtils);
     },
 
-    get configuration() {
-        return shared.pipeline(require('./configuration'), localUtils);
+    get config() {
+        return shared.pipeline(require('./config'), localUtils);
     },
 
     get publicSettings() {
@@ -113,6 +121,10 @@ module.exports = {
 
     get actions() {
         return shared.pipeline(require('./actions'), localUtils);
+    },
+
+    get site() {
+        return shared.pipeline(require('./site'), localUtils);
     },
 
     get serializers() {

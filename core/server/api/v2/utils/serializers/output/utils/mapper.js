@@ -32,9 +32,9 @@ const mapPost = (model, frame) => {
     if (utils.isContentAPI(frame)) {
         date.forPost(jsonModel);
         members.forPost(jsonModel, frame);
-        extraAttrs.forPost(frame, model, jsonModel);
     }
 
+    extraAttrs.forPost(frame, model, jsonModel);
     clean.post(jsonModel, frame);
 
     if (frame.options && frame.options.withRelated) {
@@ -54,13 +54,6 @@ const mapPost = (model, frame) => {
                 jsonModel.authors = jsonModel.authors.map(author => mapUser(author, frame));
             }
         });
-    }
-
-    /**
-     * Remove extra data attributes passed for filtering when used with columns/fields as bookshelf doesn't filter it out
-     */
-    if (frame.options.columns && frame.options.columns.indexOf('page') < 0) {
-        delete jsonModel.page;
     }
 
     return jsonModel;

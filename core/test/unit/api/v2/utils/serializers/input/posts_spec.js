@@ -35,7 +35,7 @@ describe('Unit: v2/utils/serializers/input/posts', function () {
             };
 
             serializers.input.posts.browse(apiConfig, frame);
-            should.equal(frame.options.filter, undefined);
+            should.equal(frame.options.filter, '(page:false)+status:[draft,published,scheduled]');
         });
 
         it('combine filters', function () {
@@ -135,7 +135,7 @@ describe('Unit: v2/utils/serializers/input/posts', function () {
     });
 
     describe('read', function () {
-        it('with apiType of "content" it sets data.page to false', function () {
+        it('with apiType of "content" it forces page filter', function () {
             const apiConfig = {};
             const frame = {
                 apiType: 'content',
@@ -144,25 +144,24 @@ describe('Unit: v2/utils/serializers/input/posts', function () {
             };
 
             serializers.input.posts.read(apiConfig, frame);
-            frame.data.page.should.eql(false);
+            frame.options.filter.should.eql('page:false');
         });
 
-        it('with apiType of "content" it overrides data.page to be false', function () {
+        it('with apiType of "content" it forces page false filter', function () {
             const apiConfig = {};
             const frame = {
                 apiType: 'content',
-                options: {},
-                data: {
-                    status: 'all',
-                    page: true
-                }
+                options: {
+                    filter: 'page:true'
+                },
+                data: {}
             };
 
             serializers.input.posts.read(apiConfig, frame);
-            frame.data.page.should.eql(false);
+            frame.options.filter.should.eql('(page:true)+page:false');
         });
 
-        it('with apiType of "admin" it does not set data.page', function () {
+        it('with apiType of "admin" it forces page & status false filter', function () {
             const apiConfig = {};
             const frame = {
                 apiType: 'admin',
@@ -178,10 +177,10 @@ describe('Unit: v2/utils/serializers/input/posts', function () {
             };
 
             serializers.input.posts.read(apiConfig, frame);
-            should.not.exist(frame.data.page);
+            frame.options.filter.should.eql('(page:false)+status:[draft,published,scheduled]');
         });
 
-        it('with non public request it does not override data.page', function () {
+        it('with apiType of "admin" it forces page filter & respects custom status filter', function () {
             const apiConfig = {};
             const frame = {
                 apiType: 'admin',
@@ -191,15 +190,14 @@ describe('Unit: v2/utils/serializers/input/posts', function () {
                             id: 1,
                             type: 'admin'
                         }
-                    }
+                    },
+                    filter: 'status:draft'
                 },
-                data: {
-                    page: true
-                }
+                data: {}
             };
 
             serializers.input.posts.read(apiConfig, frame);
-            frame.data.page.should.eql(true);
+            frame.options.filter.should.eql('(status:draft)+page:false');
         });
 
         it('remove mobiledoc option from formats', function () {
@@ -371,6 +369,13 @@ describe('Unit: v2/utils/serializers/input/posts', function () {
         });
 
         describe('Ensure html to mobiledoc conversion', function () {
+            before(function () {
+                // NOTE: only supported in node v8 and higher
+                if (process.version.startsWith('v6.')) {
+                    this.skip();
+                }
+            });
+
             it('no transformation when no html source option provided', function () {
                 const apiConfig = {};
                 const mobiledoc = '{"version":"0.3.1","atoms":[],"cards":[],"sections":[]}';
@@ -440,6 +445,52 @@ describe('Unit: v2/utils/serializers/input/posts', function () {
                 let postData = frame.data.posts[0];
                 postData.mobiledoc.should.not.equal(mobiledoc);
                 postData.mobiledoc.should.equal('{"version":"0.3.1","atoms":[],"cards":[],"markups":[],"sections":[[1,"p",[[0,[],0,"this is great feature"]]]]}');
+            });
+        });
+
+        describe('Ensure relations format', function () {
+            it('relations is array of objects', function () {
+                const apiConfig = {};
+
+                const frame = {
+                    options: {},
+                    data: {
+                        posts: [
+                            {
+                                id: 'id1',
+                                authors: [{id: 'id'}],
+                                tags: [{slug: 'slug1', name: 'hey'}, {slug: 'slug2'}]
+                            }
+                        ]
+                    }
+                };
+
+                serializers.input.posts.edit(apiConfig, frame);
+
+                frame.data.posts[0].authors.should.eql([{id: 'id'}]);
+                frame.data.posts[0].tags.should.eql([{slug: 'slug1', name: 'hey'}, {slug: 'slug2'}]);
+            });
+
+            it('authors is array of strings', function () {
+                const apiConfig = {};
+
+                const frame = {
+                    options: {},
+                    data: {
+                        posts: [
+                            {
+                                id: 'id1',
+                                authors: ['email1', 'email2'],
+                                tags: ['name1', 'name2'],
+                            }
+                        ]
+                    }
+                };
+
+                serializers.input.posts.edit(apiConfig, frame);
+
+                frame.data.posts[0].authors.should.eql([{email: 'email1'}, {email: 'email2'}]);
+                frame.data.posts[0].tags.should.eql([{name: 'name1'}, {name: 'name2'}]);
             });
         });
     });
