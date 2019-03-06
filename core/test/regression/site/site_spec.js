@@ -4,6 +4,7 @@ const should = require('should'),
     cheerio = require('cheerio'),
     testUtils = require('../../utils'),
     configUtils = require('../../utils/configUtils'),
+    appsService = require('../../../server/services/apps'),
     settingsService = require('../../../server/services/settings'),
     themeService = require('../../../server/services/themes'),
     siteApp = require('../../../server/web/parent-app');
@@ -20,7 +21,7 @@ describe('Integration - Web - Site', function () {
 
         describe('default routes.yaml', function () {
             before(function () {
-                testUtils.integrationTesting.defaultMocks(sinon);
+                testUtils.integrationTesting.defaultMocks(sinon, {amp: true, apps: true});
                 testUtils.integrationTesting.overrideGhostConfig(configUtils);
 
                 return testUtils.integrationTesting.initGhost()
@@ -30,6 +31,9 @@ describe('Integration - Web - Site', function () {
 
                         app = siteApp({start: true});
                         return testUtils.integrationTesting.urlService.waitTillFinished();
+                    })
+                    .then(() => {
+                        return appsService.init();
                     });
             });
 
@@ -61,6 +65,22 @@ describe('Integration - Web - Site', function () {
                         .then(function (response) {
                             response.statusCode.should.eql(200);
                             response.template.should.eql('post');
+                        });
+                });
+
+                it('serve amp', function () {
+                    const req = {
+                        secure: true,
+                        method: 'GET',
+                        url: '/html-ipsum/amp/',
+                        host: 'example.com'
+                    };
+
+                    return testUtils.mocks.express.invoke(app, req)
+                        .then(function (response) {
+                            response.statusCode.should.eql(200);
+                            response.template.should.match(/amp\.hbs/);
+                            response.body.should.match(/<h1>HTML Ipsum Presents<\/h1>/);
                         });
                 });
 
@@ -1749,7 +1769,7 @@ describe('Integration - Web - Site', function () {
         describe('default routes.yaml', function () {
             before(function () {
                 testUtils.integrationTesting.urlService.resetGenerators();
-                testUtils.integrationTesting.defaultMocks(sinon);
+                testUtils.integrationTesting.defaultMocks(sinon, {amp: true, apps: true});
                 testUtils.integrationTesting.overrideGhostConfig(configUtils);
 
                 return testUtils.integrationTesting.initGhost()
@@ -1759,11 +1779,14 @@ describe('Integration - Web - Site', function () {
 
                         app = siteApp({start: true});
                         return testUtils.integrationTesting.urlService.waitTillFinished();
+                    })
+                    .then(() => {
+                        return appsService.init();
                     });
             });
 
             beforeEach(function () {
-                const postsAPI = require('../../../server/api/v2/posts');
+                const postsAPI = require('../../../server/api/v2/posts-public');
                 configUtils.set('url', 'http://example.com');
                 postSpy = sinon.spy(postsAPI.browse, 'query');
             });
@@ -1790,6 +1813,22 @@ describe('Integration - Web - Site', function () {
                         .then(function (response) {
                             response.statusCode.should.eql(200);
                             response.template.should.eql('post');
+                        });
+                });
+
+                it('serve amp', function () {
+                    const req = {
+                        secure: true,
+                        method: 'GET',
+                        url: '/html-ipsum/amp/',
+                        host: 'example.com'
+                    };
+
+                    return testUtils.mocks.express.invoke(app, req)
+                        .then(function (response) {
+                            response.statusCode.should.eql(200);
+                            response.template.should.match(/amp\.hbs/);
+                            response.body.should.match(/<h1>HTML Ipsum Presents<\/h1>/);
                         });
                 });
 
@@ -2982,7 +3021,7 @@ describe('Integration - Web - Site', function () {
                                 data: {
                                     query: {
                                         joe: {
-                                            controller: 'authors',
+                                            controller: 'authorsPublic',
                                             resource: 'authors',
                                             type: 'read',
                                             options: {
@@ -3007,7 +3046,7 @@ describe('Integration - Web - Site', function () {
                                 data: {
                                     query: {
                                         tag: {
-                                            controller: 'authors',
+                                            controller: 'authorsPublic',
                                             resource: 'authors',
                                             type: 'read',
                                             options: {
@@ -3027,7 +3066,7 @@ describe('Integration - Web - Site', function () {
                                 data: {
                                     query: {
                                         post: {
-                                            controller: 'posts',
+                                            controller: 'postsPublic',
                                             resource: 'posts',
                                             type: 'read',
                                             options: {

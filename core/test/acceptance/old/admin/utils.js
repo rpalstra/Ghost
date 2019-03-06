@@ -22,7 +22,7 @@ const expectedProperties = {
 
     action: ['id', 'resource_type', 'actor_type', 'event', 'created_at', 'actor'],
 
-    config: ['version', 'environment', 'database', 'mail', 'labs', 'clientExtensions', 'enableDeveloperExperiments'],
+    config: ['version', 'environment', 'database', 'mail', 'labs', 'clientExtensions', 'enableDeveloperExperiments', 'useGravatar'],
 
     post: _(schema.posts)
         .keys()
@@ -61,6 +61,7 @@ const expectedProperties = {
         .without('locale')
         .without('ghost_auth_access_token')
         .without('ghost_auth_id')
+        .concat('url')
     ,
     tag: _(schema.tags)
         .keys()
@@ -128,15 +129,14 @@ module.exports = {
     getValidAdminToken(audience) {
         const jwt = require('jsonwebtoken');
         const JWT_OPTIONS = {
+            keyid: testUtils.DataGenerator.Content.api_keys[0].id,
             algorithm: 'HS256',
             expiresIn: '5m',
             audience: audience
         };
 
         return jwt.sign(
-            {
-                kid: testUtils.DataGenerator.Content.api_keys[0].id
-            },
+            {},
             Buffer.from(testUtils.DataGenerator.Content.api_keys[0].secret, 'hex'),
             JWT_OPTIONS
         );

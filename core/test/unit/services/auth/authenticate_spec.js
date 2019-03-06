@@ -6,6 +6,7 @@ const ClientPasswordStrategy = require('passport-oauth2-client-password').Strate
 const auth = require('../../../../server/services/auth');
 const common = require('../../../../server/lib/common');
 const models = require('../../../../server/models');
+const labs = require('../../../../server/services/labs');
 const user = {id: 1};
 const info = {scope: '*'};
 const token = 'test_token';
@@ -203,6 +204,10 @@ describe('Auth', function () {
     });
 
     describe('Client Authentication', function () {
+        beforeEach(function () {
+            sinon.stub(labs, 'isSet').withArgs('publicAPI').returns(true);
+        });
+
         it('shouldn\'t require authorized client with bearer token', function (done) {
             req.headers = {};
             req.headers.authorization = 'Bearer ' + token;

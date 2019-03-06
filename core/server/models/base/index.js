@@ -173,7 +173,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * If the query runs in a txn, `_previousAttributes` will be empty.
      */
     emitChange: function (model, event, options) {
-        const _emit = (ghostEvent, model) => {
+        const _emit = (ghostEvent, model, opts) => {
             if (!model.wasChanged()) {
                 return;
             }
@@ -181,7 +181,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             debug(model.tableName, ghostEvent);
 
             // @NOTE: Internal Ghost events. These are very granular e.g. post.published
-            common.events.emit(ghostEvent, model, _.omit(options, 'transacting'));
+            common.events.emit(ghostEvent, model, opts);
         };
 
         if (!options.transacting) {
@@ -203,15 +203,21 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
                     return;
                 }
 
-                _.each(this.ghostEvents, (ghostEvent) => {
-                    _emit(ghostEvent, model, options);
+                _.each(this.ghostEvents, (obj) => {
+                    _emit(obj.event, model, obj.options);
                 });
 
                 delete model.ghostEvents;
             });
         }
 
-        model.ghostEvents.push(event);
+        model.ghostEvents.push({
+            event: event,
+            options: {
+                importing: options.importing,
+                context: options.context
+            }
+        });
     },
 
     // Bookshelf `initialize` - declare a constructor-like method for model creation
@@ -593,18 +599,20 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         const options = ghostBookshelf.Model.filterOptions(unfilteredOptions, 'toJSON');
         options.omitPivot = true;
 
+        // CASE: get JSON of previous attrs
         if (options.previous) {
-            const attrs = {};
-            const relations = {};
+            const clonedModel = _.cloneDeep(this);
+            clonedModel.attributes = this._previousAttributes;
 
-            if (this._previousRelations) {
-                _.each(Object.keys(this._previousRelations), (key) => {
-                    relations[key] = this._previousRelations[key].toJSON();
+            if (this.relationships) {
+                this.relationships.forEach((relation) => {
+                    if (this._previousRelations && this._previousRelations.hasOwnProperty(relation)) {
+                        clonedModel.related(relation).models = this._previousRelations[relation].models;
+                    }
                 });
             }
 
-            Object.assign(attrs, this._previousAttributes, relations);
-            return attrs;
+            return proto.toJSON.call(clonedModel, options);
         }
 
         return proto.toJSON.call(this, options);
@@ -679,7 +687,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         case 'edit':
             return baseOptions.concat(extraOptions, ['id', 'require']);
         case 'findOne':
-            return baseOptions.concat(extraOptions, ['require']);
+            return baseOptions.concat(extraOptions, ['columns', 'require']);
         case 'findAll':
             return baseOptions.concat(extraOptions, ['columns']);
         case 'findPage':
@@ -922,6 +930,11 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         // @NOTE: The API layer decides if this option is allowed
         if (options.filter) {
             model.applyDefaultAndCustomFilters(options);
+        }
+
+        // Ensure only valid fields/columns are added to query
+        if (options.columns) {
+            options.columns = _.intersection(options.columns, this.prototype.permittedAttributes());
         }
 
         return model.fetch(options);

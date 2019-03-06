@@ -108,7 +108,16 @@ describe('Posts API', function () {
                     var jsonResponse = res.body;
                     should.exist(jsonResponse);
                     should.exist(jsonResponse.errors);
-                    testUtils.API.checkResponseValue(jsonResponse.errors[0], ['message', 'errorType']);
+                    testUtils.API.checkResponseValue(jsonResponse.errors[0], [
+                        'message',
+                        'context',
+                        'type',
+                        'details',
+                        'property',
+                        'help',
+                        'code',
+                        'id'
+                    ]);
                     done();
                 });
         });
@@ -135,8 +144,8 @@ describe('Posts API', function () {
                         .expect(200);
                 })
                 .then((res) => {
-                    // @NOTE: you cannot modify published_at manually, that's why the resource won't change.
-                    should.not.exist(res.headers['x-cache-invalidate']);
+                    // @NOTE: if you set published_at to null and the post is published, we set it to NOW in model layer
+                    should.exist(res.headers['x-cache-invalidate']);
                     should.exist(res.body.posts);
                     should.exist(res.body.posts[0].published_at);
                 });
@@ -190,7 +199,16 @@ describe('Posts API', function () {
                     should.not.exist(res.headers['x-cache-invalidate']);
                     should.exist(res.body);
                     should.exist(res.body.errors);
-                    testUtils.API.checkResponseValue(res.body.errors[0], ['message', 'errorType']);
+                    testUtils.API.checkResponseValue(res.body.errors[0], [
+                        'message',
+                        'context',
+                        'type',
+                        'details',
+                        'property',
+                        'help',
+                        'code',
+                        'id'
+                    ]);
                 });
         });
     });
