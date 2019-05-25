@@ -393,6 +393,7 @@ function redirectToAdmin(status, res, adminPath) {
  * the variable that takes the result of this function
  */
 function makeAbsoluteUrls(html, siteUrl, itemUrl, options = {assetsOnly: false}) {
+    html = html || '';
     const htmlContent = cheerio.load(html, {decodeEntities: false});
     const staticImageUrlPrefixRegex = new RegExp(STATIC_IMAGE_URL_PREFIX);
 
@@ -460,11 +461,20 @@ function absoluteToRelative(urlToModify, options) {
     return relativePath;
 }
 
+function relativeToAbsolute(url) {
+    if (!url.startsWith('/') || url.startsWith('//')) {
+        return url;
+    }
+
+    return createUrl(url, true);
+}
+
 function deduplicateDoubleSlashes(url) {
     return url.replace(/\/\//g, '/');
 }
 
 module.exports.absoluteToRelative = absoluteToRelative;
+module.exports.relativeToAbsolute = relativeToAbsolute;
 module.exports.makeAbsoluteUrls = makeAbsoluteUrls;
 module.exports.getProtectedSlugs = getProtectedSlugs;
 module.exports.getSubdir = getSubdir;
@@ -479,6 +489,7 @@ module.exports.deduplicateDoubleSlashes = deduplicateDoubleSlashes;
 module.exports.getApiPath = getApiPath;
 module.exports.getVersionPath = getVersionPath;
 module.exports.getBlogUrl = getBlogUrl;
+module.exports.getSiteUrl = getBlogUrl;
 
 /**
  * If you request **any** image in Ghost, it get's served via

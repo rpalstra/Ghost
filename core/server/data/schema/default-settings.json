@@ -11,6 +11,9 @@
         },
         "session_secret": {
             "defaultValue": null
+        },
+        "theme_session_secret": {
+            "defaultValue": null
         }
     },
     "blog": {
@@ -68,7 +71,10 @@
             }
         },
         "amp": {
-            "defaultValue" : "true"
+            "defaultValue" : "true",
+            "validations": {
+                "isIn": [["true", "false"]]
+            }
         },
         "ghost_head": {
             "defaultValue" : ""
@@ -100,17 +106,12 @@
             "defaultValue": "casper"
         }
     },
-    "app": {
-        "active_apps": {
-            "defaultValue": "[]"
-        },
-        "installed_apps": {
-            "defaultValue": "[]"
-        }
-    },
     "private": {
         "is_private": {
-            "defaultValue": "false"
+            "defaultValue": "false",
+            "validations": {
+                "isIn": [["true", "false"]]
+            }
         },
         "password": {
             "defaultValue": ""

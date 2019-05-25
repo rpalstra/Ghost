@@ -16,7 +16,7 @@
     <a href="https://docs.ghost.org/">Documentation</a> |
     <a href="https://github.com/TryGhost/Ghost/blob/master/.github/CONTRIBUTING.md">Contributing</a> |
     <a href="https://opencollective.com/ghost">Donate</a> |
-    <a href="https://twitter.com/tryghost">Twitter</a>
+    <a href="https://twitter.com/ghost">Twitter</a>
     <br /><br />
     <a href="https://ghost.org">
         <img src="https://img.shields.io/badge/downloads-1.4M-brightgreen.svg" alt="Downloads" />
@@ -94,7 +94,7 @@ Check out our [official documentation](https://docs.ghost.org) for more informat
 
 You can find answers to a huge variety of questions, along with a large community of helpful developers over on the [Ghost forum](https://forum.ghost.org/) - replies are generally very quick. **Ghost(Pro)** customers also have access to 24/7 email support.
 
-To stay up to date with all the latest news and product updates, make sure you [subscribe to our blog](https://blog.ghost.org) — or your can always follow us [on Twitter](https://twitter.com/tryghost/), if you prefer your updates bite-sized and facetious. :saxophone::turtle:
+To stay up to date with all the latest news and product updates, make sure you [subscribe to our blog](https://blog.ghost.org) — or your can always follow us [on Twitter](https://twitter.com/Ghost), if you prefer your updates bite-sized and facetious. :saxophone::turtle:
 
 &nbsp;
 

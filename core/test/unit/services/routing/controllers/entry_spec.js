@@ -1,11 +1,10 @@
 const should = require('should'),
     sinon = require('sinon'),
     testUtils = require('../../../../utils'),
-    filters = require('../../../../../server/filters'),
     urlService = require('../../../../../server/services/url'),
     controllers = require('../../../../../server/services/routing/controllers'),
     helpers = require('../../../../../server/services/routing/helpers'),
-    EDITOR_URL = '/editor/';
+    EDITOR_URL = `/editor/post/`;
 
 describe('Unit - services/routing/controllers/entry', function () {
     let req, res, entryLookUpStub, secureStub, renderStub, post, page;
@@ -32,8 +31,6 @@ describe('Unit - services/routing/controllers/entry', function () {
             return renderStub;
         });
 
-        sinon.stub(filters, 'doFilter');
-
         sinon.stub(urlService.utils, 'redirectToAdmin');
         sinon.stub(urlService.utils, 'redirect301');
         sinon.stub(urlService, 'getResourceById');
@@ -45,7 +42,9 @@ describe('Unit - services/routing/controllers/entry', function () {
         };
 
         res = {
-            routerOptions: {},
+            routerOptions: {
+                resourceType: 'posts'
+            },
             render: sinon.spy(),
             redirect: sinon.spy()
         };
@@ -73,8 +72,6 @@ describe('Unit - services/routing/controllers/entry', function () {
 
         res.routerOptions.resourceType = 'posts';
 
-        filters.doFilter.withArgs('prePostsRender', post, res.locals).resolves();
-
         urlService.getResourceById.withArgs(post.id).returns({
             config: {
                 type: 'posts'
@@ -86,12 +83,10 @@ describe('Unit - services/routing/controllers/entry', function () {
                 entry: post
             });
 
-        renderStub.callsFake(function () {
+        controllers.entry(req, res, function () {
             secureStub.calledOnce.should.be.true();
             done();
-        });
-
-        controllers.entry(req, res);
+        }).catch(done);
     });
 
     describe('[edge cases] resource found', function () {
@@ -125,7 +120,9 @@ describe('Unit - services/routing/controllers/entry', function () {
                 done();
             });
 
-            controllers.entry(req, res);
+            controllers.entry(req, res, (err) => {
+                done(err);
+            });
         });
 
         it('type of router !== type of resource', function (done) {
