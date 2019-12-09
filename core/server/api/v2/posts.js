@@ -1,8 +1,8 @@
 const models = require('../../models');
 const common = require('../../lib/common');
-const urlService = require('../../services/url');
+const urlUtils = require('../../lib/url-utils');
 const allowedIncludes = ['tags', 'authors', 'authors.roles'];
-const unsafeAttrs = ['status', 'authors'];
+const unsafeAttrs = ['status', 'authors', 'visibility'];
 
 module.exports = {
     docName: 'posts',
@@ -42,7 +42,10 @@ module.exports = {
             'fields',
             'formats',
             'debug',
-            'absolute_urls'
+            'absolute_urls',
+            // NOTE: only for internal context
+            'forUpdate',
+            'transacting'
         ],
         data: [
             'id',
@@ -115,7 +118,10 @@ module.exports = {
         options: [
             'include',
             'id',
-            'source'
+            'source',
+            // NOTE: only for internal context
+            'forUpdate',
+            'transacting'
         ],
         validation: {
             options: {
@@ -146,8 +152,8 @@ module.exports = {
                         model.get('status') === 'scheduled' && model.wasChanged()
                     ) {
                         this.headers.cacheInvalidate = {
-                            value: urlService.utils.urlFor({
-                                relativeUrl: urlService.utils.urlJoin('/p', model.get('uuid'), '/')
+                            value: urlUtils.urlFor({
+                                relativeUrl: urlUtils.urlJoin('/p', model.get('uuid'), '/')
                             })
                         };
                     } else {
