@@ -384,6 +384,9 @@
             "tags": {
                 "tagNotFound": "Tag not found."
             },
+            "labels": {
+                "labelNotFound": "Label not found."
+            },
             "themes": {
                 "noPermissionToBrowseThemes": "You do not have permission to browse themes.",
                 "noPermissionToEditThemes": "You do not have permission to edit themes.",
@@ -464,6 +467,7 @@
                 "DatabaseVersionError": "Database version compatibility error, cannot {action}.",
                 "EmailError": "Error sending email!",
                 "ThemeValidationError": "Theme validation error, cannot {action}.",
+                "HostLimitError": "Host Limit error, cannot {action}.",
                 "DisabledFeatureError": "Theme validation error, the {{{helperName}}} helper is not available. Cannot {action}.",
                 "UpdateCollisionError": "Saving failed! Someone else is editing this post."
             }
@@ -565,6 +569,9 @@
             "asset": {
                 "pathIsRequired": "The \\{\\{asset\\}\\} helper must be passed a path"
             },
+            "cancel_link": {
+                "invalidData": "The \\{\\{cancel_link\\}\\} helper was used outside of a subscription context. See https://ghost.org/docs/members/cancel-link/."
+            },
             "foreach": {
                 "iteratorNeeded": "Need to pass an iterator to #foreach"
             },
@@ -602,6 +609,10 @@
             },
             "plural": {
                 "valuesMustBeDefined": "All values must be defined for empty, singular and plural"
+            },
+            "price": {
+                "attrIsRequired": "Attribute is required e.g. \\{\\{price plan.amount\\}\\}",
+                "attrMustBeNumeric": "Attribute value should be a number"
             },
             "img_url": {
                 "attrIsRequired": "Attribute is required e.g. \\{\\{img_url feature_image\\}\\}",
